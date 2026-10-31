@@ -4,15 +4,17 @@ export function readInput(
   lookYaw: number,
   seq: number,
 ): Input {
-  const axis = (positive: string, negative: string) =>
-    Number(keys.has(positive)) - Number(keys.has(negative));
+  const forward = keys.has("KeyW") || keys.has("ArrowUp");
+  const backward = keys.has("KeyS") || keys.has("ArrowDown");
+  const left = keys.has("KeyA") || keys.has("ArrowLeft");
+  const right = keys.has("KeyD") || keys.has("ArrowRight");
   return {
     seq,
-    throttle: Number(keys.has("KeyW") && !keys.has("KeyS")),
-    brake: Number(keys.has("KeyS")),
-    steer: axis("KeyA", "KeyD"),
-    moveX: axis("KeyD", "KeyA"),
-    moveZ: axis("KeyS", "KeyW"),
+    throttle: Number(forward && !backward),
+    brake: Number(backward),
+    steer: Number(left) - Number(right),
+    moveX: Number(right) - Number(left),
+    moveZ: Number(backward) - Number(forward),
     lookYaw,
   };
 }

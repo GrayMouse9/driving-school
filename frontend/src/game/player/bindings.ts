@@ -9,7 +9,7 @@ export function bindPlayerInput(game: GameScene, keys: Set<string>, blocked: () 
         }
         if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || blocked())
             return;
-        if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE'].includes(e.code))
+        if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))
             e.preventDefault();
         keys.add(e.code);
         if (e.code === 'KeyE' && !e.repeat)
