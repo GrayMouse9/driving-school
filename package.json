@@ -1,0 +1,22 @@
+{
+  "name": "driving-school",
+  "version": "1.0.0",
+  "description": "Браузерная многопользовательская 3D-игра на three.js: ученики ездят по общему городу и изучают ПДД с помощью адаптивных знаков-персонажей.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GrayMouse9/driving-school.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/GrayMouse9/driving-school/issues"
+  },
+  "homepage": "https://github.com/GrayMouse9/driving-school#readme"
+}
