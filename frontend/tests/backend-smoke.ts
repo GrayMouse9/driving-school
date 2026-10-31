@@ -20,14 +20,15 @@ try{
  await wait(()=>frames[0].some(m=>m.type==='players_snapshot'&&m.payload.players.length>=2),'Two real clients are not visible together');
  const starts=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState?.vehicle?.position)));
  assert.ok(starts.every(Boolean));
- await Promise.all(pages.map(p=>p.keyboard.down('KeyW')));
+ const forwardKeys=['KeyW','ArrowUp'],reverseKeys=['KeyS','ArrowDown'];
+ await Promise.all(pages.map((p,i)=>p.keyboard.down(forwardKeys[i])));
  await wait(async()=>{const pos=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState?.vehicle?.position)));return pos.every((p,i)=>p&&Math.hypot(p.x-starts[i].x,p.z-starts[i].z)>2);},'Two clients did not move simultaneously');
- await Promise.all(pages.map(p=>p.keyboard.up('KeyW')));
+ await Promise.all(pages.map((p,i)=>p.keyboard.up(forwardKeys[i])));
  await wait(async()=>{const speeds=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState?.vehicle?.speed)));return speeds.every(s=>s!==undefined&&Math.abs(s)<.05);},'Release did not stop both cars');
  const forward=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState.vehicle.position)));
- await Promise.all(pages.map(p=>p.keyboard.down('KeyS')));
+ await Promise.all(pages.map((p,i)=>p.keyboard.down(reverseKeys[i])));
  await wait(async()=>{const speeds=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState?.vehicle?.speed)));return speeds.every(s=>s<-1);},'Two clients could not reverse together');
- await Promise.all(pages.map(p=>p.keyboard.up('KeyS')));
+ await Promise.all(pages.map((p,i)=>p.keyboard.up(reverseKeys[i])));
  await wait(async()=>{const speeds=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState?.vehicle?.speed)));return speeds.every(s=>s!==undefined&&Math.abs(s)<.05);},'Reverse did not stop on release');
  const vehicleId=await pages[0].evaluate(()=>(window as any).__clientState.vehicle.id);
  await wait(()=>frames[1].some(m=>m.type==='players_snapshot'&&m.payload.vehicles.some((v:any)=>v.id===vehicleId&&Math.hypot(v.position.x-starts[0].x,v.position.z-starts[0].z)>2)),'Peer did not see the real movement');
@@ -44,6 +45,6 @@ try{
  await pages[0].waitForFunction(()=>document.getElementById('diag')?.textContent?.includes('доля:'));const diagnostics=await pages[0].locator('#diag').textContent();const share=diagnostics?.match(/доля: ([\d.]+)%/);assert.ok(share,'No cache fraction');assert.ok(Number(share[1])<=10);
  await pages[0].screenshot({path:'/tmp/hahaton-real-multiplayer.png'});
  const serverErrors=frames.flat().filter(m=>m.type==='server_error');assert.deepEqual(serverErrors,[]);assert.deepEqual(errors,[]);
- console.log(JSON.stringify({result:'PASS',actualBackend:base,accounts:users.map(u=>u.username),verified:['cookie sessions','two browser contexts in one world','simultaneous forward/reverse of both cars; release to stop; chat focus recovery','peer movement visibility','chat','world load acknowledgments','server position reconnect'],diagnostics},null,2));
+ console.log(JSON.stringify({result:'PASS',actualBackend:base,accounts:users.map(u=>u.username),verified:['cookie sessions','two browser contexts in one world','simultaneous WASD/arrows forward/reverse; release to stop; chat focus recovery','peer movement visibility','chat','world load acknowledgments','server position reconnect'],diagnostics},null,2));
  console.log('This verifies two local browser contexts, not separate physical laptops. LLM and lesson validation are not part of this run.');
 }finally{await browser.close();}

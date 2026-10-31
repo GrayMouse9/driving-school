@@ -1,11 +1,9 @@
-# Автошкола — Говорящий город
+# Автошкола
 
 Браузерный многопользовательский тренажёр ПДД на TypeScript, three.js и Go.
 Один компьютер запускает backend и PostgreSQL и раздаёт готовый frontend.
 Остальным участникам нужен только браузер в общей LAN/Wi-Fi сети.
 
-Рабочая папка: `/home/dasha/files/sem5/hahaton`.
-В Windows: `\\wsl.localhost\Ubuntu-24.04\home\dasha\files\sem5\hahaton`.
 
 ## Структура
 
@@ -30,10 +28,10 @@ backend/
   internal/progress/   чтение прогресса обучения
   internal/storage/    SQL-инициализация и сохранение позиций
   internal/httpx/      общий формат HTTP-ответов и ошибок
-  internal/scenario/   зарезервировано; учебный сервер пока не реализован
-  internal/ai/         зарезервировано; AI gateway пока не реализован
+  internal/scenario/   учебный сервер
+  internal/ai/         AI
   migrations/          встроенный SQL начальной схемы
-ai-service/            пустые app/, agents/, retrieval/ для кода Даши К
+ai-service/
 server-data/
   world/               активная карта, генератор и проверки
   education/           место для исполняемого учебного контента, пока пусто
@@ -74,9 +72,8 @@ go run ./cmd/server
 
 Go раздаёт frontend и API/WS с одного адреса. Отдельный Vite для этого режима не нужен.
 В WSL может требоваться проброс порта Windows; подробности в
-[инструкции запуска](docs/запуск.md).
-Старые временные команды, ссылающиеся на `client/`, `server/` и `content/`,
-после реорганизации нужно заменить командами выше.
+[инструкции запуска](docs/setup.md).
+
 
 ## Разработка frontend
 
@@ -94,43 +91,9 @@ npm --prefix frontend run dev
 «Проверка 3D без сервера» — отдельная локальная сцена. Она не использует
 настоящую авторизацию, PostgreSQL, мультиплеер или ИИ.
 
-W — вперёд, S — тормоз/назад, A/D — поворот. Отпускание клавиш останавливает
+W/↑ — вперёд, S/↓ — назад, A/D или ←/→ — поворот. Отпускание клавиш останавливает
 машину. После чата щёлкнуть по дороге. E/щелчок открывает окно знака, Esc закрывает.
 Выхода из машины и обзора мышью нет.
-
-## Что менять руками
-
-| Что | Где |
-|---|---|
-| Активная серверная карта | `server-data/world/generate-training-world.mjs` |
-| Генерация и проверка карты | `node server-data/world/generate-training-world.mjs`, затем `node server-data/world/check-world.mjs --go` |
-| Локальная preview-сцена | `frontend/src/game/world/preview.ts` |
-| Геометрия и камера | `frontend/src/game/rendering/` |
-| Разметка и стили | `frontend/src/ui/layout.ts`, `frontend/src/ui/style.css` |
-| Форма авторизации | `frontend/src/auth/` |
-| HTTP и WS клиента | `frontend/src/network/` |
-| Загрузка и лимит данных | `frontend/src/game/world/` |
-| Движение на сервере | `backend/internal/player/physics.go` |
-| Серверный мир и сетевые события | `backend/internal/world/`, `backend/internal/realtime/` |
-
-Координаты в метрах: X — поперёк, Z — вдоль земли, Y — вверх.
-`yaw=0` направлен к −Z, `PI/2` к −X, `−PI/2` к +X.
-После изменения серверной карты нужна регенерация JSON и перезапуск backend.
-Правки preview не меняют активную серверную карту.
-
-## Проверки
-
-```bash
-npm --prefix frontend test
-npm --prefix frontend run build
-node server-data/world/check-world.mjs --go
-```
-
-Из `backend/`: `go test ./...`. Для интеграционных тестов PostgreSQL нужна
-отдельная база в `DRIVING_SCHOOL_TEST_DATABASE_URL`. Без неё эти проверки пропускаются.
-`frontend/tests/browser-smoke.ts` использует HTTP/WS-фикстуры;
-`frontend/tests/backend-smoke.ts` проверяет настоящий сервер по `BACKEND_URL`.
-Второй тест занимает две машины, поэтому запускать его на отдельном тестовом сервере.
 
 ## Состояние функций
 
@@ -144,11 +107,10 @@ node server-data/world/check-world.mjs --go
 
 ## Документация
 
-- [Оглавление](docs/README.md).
-- [Архитектура](docs/архитектура.md).
-- [Требования](docs/требования.md).
+- [Запуск и сеть](docs/setup.md).
+- [Архитектура](docs/architecture.md).
+- [Требования](docs/requirements.md).
 - [Фактический API](docs/api-contracts.md).
-- [Учебные ситуации](<docs/superpowers/specs/учебные ситуации.md>).
+- [Учебные ситуации](docs/scenarios.md).
 
 Спецификации и планы дальнейших изменений хранятся в `docs/superpowers/`.
-Коммиты, push и pull requests выполняет пользователь.
