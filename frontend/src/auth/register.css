@@ -1,0 +1,167 @@
+/* Экран регистрации (см. register.ts). Кольцо слева, мышка-«вынюхиватель» справа. */
+
+#register-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200; /* выше экрана входа (100): вход не просвечивает */
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 40px;
+}
+
+#register-modal.reg-in {
+  animation: reg-appear 0.35s ease-out both;
+}
+
+@keyframes reg-appear {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* размеры считаются от --ring, как на экране входа */
+.reg-stage {
+  --ring: min(70vh, 48vw);
+  position: relative;
+  width: calc(var(--ring) * 1.52);
+  height: var(--ring);
+  font-size: calc(var(--ring) / 38);
+}
+
+.reg-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--ring);
+  height: var(--ring);
+  background: url("/circul.png") center / contain no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reg-form-wrap {
+  width: 19.8em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.reg-ring .auth-title {
+  font-size: 2.1em;
+  margin: 0 0 0.55em;
+}
+
+.reg-ring .auth-form {
+  gap: 0.65em;
+}
+
+.reg-ring .auth-input {
+  height: 2.9em;
+  padding: 0 1.2em;
+  border: 1px solid #444;
+  border-radius: 1.5em;
+  font-size: 1em;
+}
+
+.reg-ring .btn-primary {
+  height: 2.65em;
+  padding: 0;
+  border-radius: 1.4em;
+  font-size: 1em;
+  margin-top: 0.5em;
+}
+
+.reg-note {
+  min-height: 1.5em;
+  margin: 0.6em 0 0;
+  font-size: 0.9em;
+  text-align: center;
+  color: #444;
+}
+
+.reg-note[data-kind="error"] { color: #d42b2b; }
+.reg-note[data-kind="ok"] { color: #2a7a2a; }
+
+/* мышка лежит справа внизу и «обнюхивает» кольцо */
+.reg-mouse {
+  position: absolute;
+  right: 0;
+  bottom: calc(var(--ring) * 0.04);
+  width: calc(var(--ring) * 0.62);
+  height: auto;
+  z-index: 2;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.18));
+  transform-origin: 20% 80%;
+  animation: reg-sniff 2.6s ease-in-out infinite;
+}
+
+@keyframes reg-sniff {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20% { transform: translateX(-6px) rotate(-1.2deg); }
+  35% { transform: translateX(0) rotate(0); }
+  55% { transform: translateX(-8px) rotate(-1.6deg); }
+  70% { transform: translateX(0) rotate(0); }
+}
+
+.reg-cone {
+  position: absolute;
+  left: calc(var(--ring) * 0.755);
+  bottom: calc(var(--ring) * 0.045);
+  width: calc(var(--ring) * 0.15);
+  height: auto;
+  z-index: 3;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.2));
+  transform-origin: 50% 100%;
+}
+
+/* качнулся в тот момент, когда мышка ткнулась носом */
+@keyframes reg-cone-wobble {
+  0%, 15%, 40%, 100% { transform: rotate(0); }
+  25% { transform: rotate(-5deg); }
+  60% { transform: rotate(-6deg); }
+  72% { transform: rotate(1.5deg); }
+}
+
+.reg-back {
+  margin-top: -5px;
+  font-size: 15px;
+}
+
+.reg-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #666;
+  font-size: 27px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: -5px;
+}
+
+.reg-close:hover {
+  background: #e4e4e4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reg-mouse,
+  .reg-cone,
+  #register-modal.reg-in {
+    animation: none;
+  }
+}

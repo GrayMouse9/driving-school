@@ -1,3 +1,4 @@
-import './ui/style.css';
-import { startApplication } from './app/application';
+import "./auth/auth";
+import { startApplication } from "./app/application";
+
 startApplication();

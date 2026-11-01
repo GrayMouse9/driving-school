@@ -1,0 +1,729 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font: 15px system-ui, sans-serif;
+  color: #213d44;
+  background: #bddbe7;
+}
+
+canvas {
+  display: block;
+  position: fixed;
+  inset: 0;
+}
+
+header,
+footer {
+  position: fixed;
+  left: 24px;
+  right: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  pointer-events: none;
+}
+
+header {
+  top: 22px;
+}
+
+.brand {
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.brand span {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  margin-top: 4px;
+}
+
+#connection,
+.brand {
+  background: #f9f5e7ed;
+  border-radius: 15px;
+  padding: 13px 18px;
+  box-shadow: 0 5px 24px #294b4e15;
+}
+
+.panel {
+  background: #faf7edee;
+  border: 1px solid #ffffffa0;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 12px 50px #264b5820;
+}
+
+#diag {
+  position: fixed;
+  top: 100px;
+  right: 24px;
+  padding: 13px 17px;
+  font: 11px/1.7 ui-monospace, monospace;
+  white-space: pre-line;
+  max-width: 340px;
+}
+
+footer {
+  bottom: 24px;
+}
+
+footer strong {
+  font-size: 34px;
+  background: #213e47e8;
+  color: #fff8e4;
+  padding: 10px 22px;
+  border-radius: 15px;
+}
+
+footer small {
+  font-size: 14px;
+}
+
+#hint {
+  padding: 12px 18px;
+  background: #f9f5e7ed;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+#talk {
+  position: fixed;
+  right: 24px;
+  top: 32vh;
+  width: min(420px, 90vw);
+}
+
+#messages {
+  max-height: 220px;
+  overflow: auto;
+}
+
+#talk form,
+#chat form {
+  display: flex;
+  gap: 8px;
+}
+
+#talk input,
+#chat input {
+  margin: 0;
+  min-width: 0;
+}
+
+.close {
+  float: right;
+  padding: 4px 11px;
+  background: #dbe7df;
+  color: #284f55;
+  font-size: 24px;
+  border: none;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+#chat {
+  position: fixed;
+  left: 24px;
+  bottom: 100px;
+  width: 340px;
+  padding: 14px;
+}
+
+#chat-log {
+  max-height: 130px;
+  overflow: auto;
+  font-size: 13px;
+}
+
+#preview-banner {
+  position: fixed;
+  bottom: 95px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #ffe7a9;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 12px;
+  max-width: 90vw;
+}
+
+#preview-banner button {
+  padding: 6px 10px;
+  margin-left: 10px;
+  border: none;
+  border-radius: 8px;
+  background: #d42b2b;
+  color: #fff;
+  cursor: pointer;
+}
+
+#feedback {
+  position: fixed;
+  top: 105px;
+  left: 24px;
+  max-width: min(480px, 85vw);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #fff0c9;
+  color: #814b31;
+  white-space: pre-wrap;
+  z-index: 300;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* ============================================
+   AUTH MENU — крыса + красный круг (ТВОИ НАСТРОЙКИ)
+   ============================================ */
+
+#login {
+  position: fixed;
+  inset: 0;
+  background: #ececec;
+  z-index: 100;
+  overflow: hidden;
+  transition: background-color 0.3s;
+}
+
+#login[data-state="open"] {
+  background: #fff;
+}
+
+/* Окно авторизации + серая мышь, которая за него цепляется.
+   Положение задаёт auth-pull.ts */
+#pull {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, -100%);
+  transform-origin: 50% 0;
+  will-change: transform;
+}
+
+#pull.pull-anim {
+  transition: transform 0.6s cubic-bezier(0.22, 1.2, 0.36, 1);
+}
+
+.auth-sheet {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  padding-bottom: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  /* пока окно свёрнуто — округлое «дно», как на макете; открылось — ровный экран */
+  border-radius: 0 0 50% 50% / 0 0 40vh 40vh;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  transition: border-radius 0.5s ease 0.15s, box-shadow 0.4s;
+}
+
+#login[data-state="open"] .auth-sheet {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.auth-sheet::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 260px;
+  background: #fff;
+}
+
+/* кольцо с формой справа, мышь слева — как на макете.
+   Всё считается от --ring, поэтому масштабируется вместе с экраном */
+.sheet-stage {
+  --ring: min(70vh, 48vw);
+  position: relative;
+  width: calc(var(--ring) * 1.44);
+  height: var(--ring);
+  font-size: calc(var(--ring) / 38);
+}
+
+.sheet-ring {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--ring);
+  height: var(--ring);
+  background: url("/circul.png") center / contain no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sheet-form {
+  width: 19.8em;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.sheet-ring .auth-title {
+  font-size: 2.1em;
+  margin: 0 0 0.55em;
+}
+
+.sheet-ring .auth-form {
+  gap: 0.65em;
+}
+
+.sheet-ring .auth-input {
+  height: 2.9em;
+  padding: 0 1.2em;
+  border: 1px solid #444;
+  border-radius: 1.5em;
+  font-size: 1em;
+}
+
+.sheet-ring .btn-primary {
+  height: 2.65em;
+  padding: 0;
+  border-radius: 1.4em;
+  font-size: 1em;
+  margin-top: 0.5em;
+}
+
+.sheet-ring .auth-divider {
+  margin: 0.8em 0;
+}
+
+.sheet-ring .auth-divider::before,
+.sheet-ring .auth-divider::after {
+  background: #333;
+}
+
+.sheet-ring .auth-divider span {
+  color: #222;
+  font-size: 1em;
+}
+
+.sheet-ring .btn-register {
+  width: 100%;
+  height: 2.65em;
+  padding: 0;
+  border: none;
+  border-radius: 1.4em;
+  background: #111;
+  color: #fff;
+  font: 600 1em system-ui, sans-serif;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.sheet-ring .btn-register:hover {
+  background: #333;
+}
+
+.auth-sheet .sheet-links {
+  flex-direction: row;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 12px;
+}
+
+.sheet-close {
+  position: absolute;
+  top: 14px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: #f0f0f0;
+  color: #666;
+  font-size: 27px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: -5px;  /* ← сдвигает контент вверх */
+}
+
+.sheet-close:hover {
+  background: #e4e4e4;
+}
+
+/* упавшая мышь: появляется, только когда окно открыто */
+.fallen-mouse {
+  position: absolute;
+  left: -100px;
+  bottom: 0;
+  width: calc(var(--ring) * 1);
+  height: auto;
+  z-index: 2;
+  transform: rotate(-2deg);
+  transform-origin: 50% 100%;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.22));
+}
+
+#login[data-state="open"] .fallen-mouse {
+  animation: mouse-fall 1s cubic-bezier(0.4, 0, 0.6, 1) 0.35s both;
+}
+
+@keyframes mouse-fall {
+  0% { opacity: 0; transform: translate(0, -100vh) rotate(-45deg); }
+  4% { opacity: 1; }
+  55% { opacity: 1; transform: translate(0, 0) rotate(-1deg); }
+  72% { transform: translate(0, -26px) rotate(-8deg); }
+  88% { transform: translate(0, 0) rotate(-3deg); }
+  100% { opacity: 1; transform: translate(0, 0) rotate(-2deg); }
+}
+
+/* серая мышь на «шнурке» под окном */
+.pull-rat {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: -4px; /* насколько мышь залезает на край окна */
+  padding: 0 0 8px;
+  background: none;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  z-index: 3;
+  transition: opacity 0.25s, visibility 0s;
+}
+
+/* когда окно открыто, мышь «упала» и висящей больше нет */
+#login[data-state="open"] .pull-rat {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.25s, visibility 0s 0.25s;
+}
+
+#login.pulling .pull-rat {
+  cursor: grabbing;
+}
+
+.pull-rat img {
+  display: block;
+  height: 240px;
+  width: auto;
+  transform-origin: 50% 0;
+  animation: rat-sway 3.4s ease-in-out infinite;
+  filter: drop-shadow(0 6px 12px rgba(0, 0, 0, 0.22));
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.pull-rat.ready img {
+  opacity: 1;
+}
+
+#login.pulling .pull-rat img {
+  animation: none;
+}
+
+.pull-rat.tug img {
+  animation: rat-tug 0.45s ease-out;
+}
+
+.pull-hint {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font: 600 15px system-ui, sans-serif;
+  color: #666;
+  transition: opacity 0.25s;
+  animation: hint-bob 1.6s ease-in-out infinite;
+}
+
+#login.pulling .pull-hint {
+  opacity: 0;
+}
+
+@keyframes rat-sway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+@keyframes rat-tug {
+  0% { transform: translateY(0); }
+  35% { transform: translateY(22px); }
+  65% { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes hint-bob {
+  0%, 100% { translate: 0 0; }
+  50% { translate: 0 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pull-rat img,
+  .pull-hint,
+  #login[data-state="open"] .fallen-mouse {
+    animation: none;
+  }
+  #login[data-state="open"] .fallen-mouse {
+    opacity: 1;
+  }
+  #pull.pull-anim {
+    transition-duration: 0.01s;
+  }
+}
+
+.auth-circle {
+  width: 750px;
+  height: 750px;
+  background: url('/circul.png') center/contain no-repeat;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.auth-content {
+  width: 520px;
+  height: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 50px 60px;
+}
+
+.auth-title {
+  font-size: 38px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0 0 30px 0;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+}
+
+.auth-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-input {
+  width: 100%;
+  padding: 16px 20px;
+  border: 2px solid #ddd;
+  border-radius: 14px;
+  background: #fff;
+  font: 16px system-ui, sans-serif;
+  color: #333;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.auth-input:focus {
+  border-color: #d42b2b;
+}
+
+.auth-input::placeholder {
+  color: #999;
+}
+
+.btn-primary {
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  background: #d42b2b;
+  color: #fff;
+  padding: 16px;
+  font: 600 17px system-ui, sans-serif;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: #b82323;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 18px 0;
+  gap: 12px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #ccc;
+}
+
+.auth-divider span {
+  font-size: 14px;
+  color: #888;
+  font-family: system-ui, sans-serif;
+}
+
+.btn-yandex {
+  width: 100%;
+  border: 2px solid #ddd;
+  border-radius: 14px;
+  background: #fff;
+  color: #333;
+  padding: 14px 20px;
+  font: 500 15px system-ui, sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: background 0.2s;
+}
+
+.btn-yandex:hover {
+  background: #f5f5f5;
+}
+
+.yandex-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.auth-footer {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #000000;
+  font: 500 14px system-ui, sans-serif;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 4px;
+}
+
+.btn-link:hover {
+  color: #b82323;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 1100px) {
+  .auth-circle {
+    width: 600px;
+    height: 600px;
+  }
+  .auth-content {
+    width: 440px;
+    height: 440px;
+    padding: 40px 50px;
+  }
+  .auth-title {
+    font-size: 32px;
+  }
+}
+
+@media (max-width: 900px) {
+  .auth-circle {
+    width: 500px;
+    height: 500px;
+  }
+  .auth-content {
+    width: 380px;
+    height: 380px;
+    padding: 30px 40px;
+  }
+  .auth-title {
+    font-size: 28px;
+    margin-bottom: 20px;
+  }
+  .auth-input {
+    padding: 14px 18px;
+    font-size: 15px;
+  }
+  .btn-primary {
+    padding: 14px;
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 600px) {
+  .auth-circle {
+    width: 380px;
+    height: 380px;
+  }
+  .auth-content {
+    width: 300px;
+    height: 300px;
+    padding: 25px 30px;
+  }
+  .auth-title {
+    font-size: 24px;
+    margin-bottom: 16px;
+  }
+  .auth-input {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+  .btn-primary {
+    padding: 12px;
+    font-size: 15px;
+  }
+}
+
+@media (max-width: 700px) {
+  #diag {
+    top: 90px;
+    right: 12px;
+    max-width: 240px;
+    font-size: 9px;
+  }
+  header,
+  footer {
+    left: 12px;
+    right: 12px;
+  }
+  #connection {
+    font-size: 11px;
+  }
+  #hint {
+    max-width: 65vw;
+    font-size: 10px;
+  }
+  #chat {
+    width: 270px;
+  }
+  #preview-banner {
+    bottom: 120px;
+  }
+}
