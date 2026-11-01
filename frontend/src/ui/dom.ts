@@ -1,6 +1,7 @@
 export const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 export function notice(text: string) {
     $('notice').textContent = text;
+    $('notice').hidden = !text;
     $('feedback').textContent = text;
     $('feedback').hidden = !text;
 }

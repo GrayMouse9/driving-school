@@ -9,26 +9,12 @@ try{
  await page.addInitScript(()=>{window.addEventListener('game:state',e=>{(window as any).__clientState=(e as CustomEvent).detail;});});
  page.on('pageerror',e=>errors.push(String(e)));page.on('request',r=>{if(new URL(r.url()).origin!==new URL(base).origin)external.push(r.url());});
  await page.route('**/*',r=>new URL(r.request().url()).origin===new URL(base).origin?r.continue():r.abort());
- await page.goto(base);await page.click('#preview');await page.waitForFunction(()=>(window as any).__clientState?.vehicle?.id==='preview-blue');
- assert.equal(await page.locator('#speed').count(),0);
- await page.keyboard.down('KeyW');await page.waitForFunction(()=>(window as any).__clientState?.vehicle?.speed>3);await page.keyboard.up('KeyW');
- await page.keyboard.down('KeyS');await page.waitForFunction(()=>(window as any).__clientState?.vehicle?.speed<-.5);await page.keyboard.up('KeyS');await page.waitForFunction(()=>(window as any).__clientState?.vehicle?.speed===0);
- await page.keyboard.press('KeyE');await page.waitForTimeout(200);assert.equal(await page.evaluate(()=>(window as any).__clientState.player.mode),'driving');
- const yaw=await page.evaluate(()=>(window as any).__clientState.vehicle.yaw);await page.mouse.move(100,100);await page.mouse.move(1200,700);await page.waitForTimeout(150);
- assert.equal(await page.evaluate(()=>(window as any).__clientState.vehicle.yaw),yaw);assert.equal(await page.evaluate(()=>document.pointerLockElement===null),true);
- if(await page.locator('#talk').isVisible())await page.click('#close-talk');
+ await page.goto(base);
+ assert.equal(await page.locator('#preview, #reconnect, #speed').count(),0);
+ assert.equal(await page.locator('#logout').isVisible(),false);
+ await page.locator('#pull-rat').focus();await page.keyboard.press('Enter');
+ await page.locator('#auth input[name="username"]').waitFor({state:'visible'});
  await page.evaluate(()=>{(window as any).__arrowDefaults=[];window.addEventListener('keydown',e=>{if(e.code.startsWith('Arrow'))(window as any).__arrowDefaults.push(e.defaultPrevented);});});
- await page.keyboard.down('ArrowUp');await page.waitForFunction(()=>(window as any).__clientState?.vehicle?.speed>1);
- const arrowYaw=await page.evaluate(()=>(window as any).__clientState.vehicle.yaw);
- await page.keyboard.down('ArrowLeft');await page.waitForFunction(yaw=>(window as any).__clientState.vehicle.yaw>yaw+.03,arrowYaw);await page.keyboard.up('ArrowLeft');
- const leftYaw=await page.evaluate(()=>(window as any).__clientState.vehicle.yaw);
- await page.keyboard.down('ArrowRight');await page.waitForFunction(yaw=>(window as any).__clientState.vehicle.yaw<yaw-.03,leftYaw);await page.keyboard.up('ArrowRight');
- await page.keyboard.up('ArrowUp');await page.waitForFunction(()=>(window as any).__clientState.vehicle.speed===0);
- await page.keyboard.down('ArrowDown');await page.waitForFunction(()=>(window as any).__clientState.vehicle.speed<-.5);await page.keyboard.up('ArrowDown');await page.waitForFunction(()=>(window as any).__clientState.vehicle.speed===0);
- assert.ok((await page.evaluate(()=>(window as any).__arrowDefaults)).every(Boolean),'Driving arrows must prevent page scrolling');
- await page.screenshot({path:'/tmp/hahaton-cockpit-v1.png'});await page.click('#leave-preview');await page.waitForTimeout(150);
- const resources=async()=>(await page.locator('#diag').textContent())?.match(/Геометрии: \d+ · текстуры: \d+/)?.[0];const baseline=await resources();
- for(let i=0;i<3;i++){await page.click('#preview');await page.waitForTimeout(200);await page.click('#leave-preview');await page.waitForTimeout(200);assert.equal(await resources(),baseline);}
  const authRequests:{action:string;credentials:unknown}[]=[];let rejectLogin=true;
  await page.route('**/api/v1/auth/*',r=>{
   const action=new URL(r.request().url()).pathname.split('/').at(-1)!;
@@ -36,15 +22,21 @@ try{
   if(action==='login'&&rejectLogin)return r.fulfill({status:401,json:{error:{message:'Неверные реквизиты'}}});
   return r.fulfill({status:action==='register'?201:action==='logout'?204:200,...(action==='logout'?{}:{json:{user:{id:'p1',username:'Тест'}}})});
  });
- await page.locator('#auth input[name="username"]').fill('Тест');
- await page.locator('#auth input[name="password"]').fill('TestRoad26');
- await page.click('#register');await page.locator('#notice').filter({hasText:'Учётная запись создана'}).waitFor();
+ await page.click('#open-register');
+ await page.locator('#reg-form input[name="username"]').fill('Тест');
+ await page.locator('#reg-form input[name="password"]').fill('short');
+ await page.locator('#reg-form input[name="password2"]').fill('short');
+ await page.locator('#reg-form button[type="submit"]').click();
+ await page.locator('#reg-notice').filter({hasText:'от 8 до 15'}).waitFor();assert.equal(authRequests.length,0);
+ await page.locator('#reg-form input[name="password"]').fill('TestRoad26');
+ await page.locator('#reg-form input[name="password2"]').fill('TestRoad26');
+ await page.locator('#reg-form button[type="submit"]').click();await page.locator('#reg-notice').filter({hasText:'Аккаунт создан'}).waitFor();
  assert.deepEqual(authRequests.at(-1),{action:'register',credentials:{username:'Тест',password:'TestRoad26'}});
+ await page.locator('#register-modal').waitFor({state:'hidden'});
+ await page.locator('#auth input[name="password"]').fill('TestRoad26');
  await page.locator('#auth button').first().click();await page.locator('#notice').filter({hasText:'Неверные реквизиты'}).waitFor();
  assert.equal(await page.locator('#login').isVisible(),true);
- let sockets=0;page.on('websocket',()=>sockets++);
- await page.route('**/api/v1/profile',r=>r.fulfill({status:401,json:{error:{message:'Нужен вход'}}}));await page.click('#reconnect');await page.locator('#notice').filter({hasText:'Нужен вход'}).waitFor();assert.equal(sockets,0);
- await page.unroute('**/api/v1/profile');await page.route('**/api/v1/profile',r=>r.fulfill({json:{user:{id:'p1',username:'Тест'},progress:{lessons:[],learnedTopics:[],mistakes:[]}}}));
+ await page.route('**/api/v1/profile',r=>r.fulfill({json:{user:{id:'p1',username:'Тест'},progress:{lessons:[],learnedTopics:[],mistakes:[]}}}));
  const fixture=previewChunk();fixture.id='test-chunk';delete fixture.accountedBytes;
  fixture.teaching={paths:[{id:'path-p',points:[{x:2.5,y:.1,z:8},{x:2.5,y:.1,z:-8}]}],zones:[{id:'stop-line',kind:'stop',outline:[{x:0,y:.1,z:-5},{x:5,y:.1,z:-5},{x:5,y:.1,z:-6},{x:0,y:.1,z:-6}]}],signals:[{id:'light-1',position:{x:-6,y:0,z:-5},yaw:0}]};
  const raw=JSON.stringify(fixture),dataBytes=new TextEncoder().encode(raw).byteLength;
@@ -77,7 +69,14 @@ try{
  });
  rejectLogin=false;await page.locator('#auth button').first().click();await page.locator('#connection').filter({hasText:'Подключено'}).waitFor();
  await page.waitForFunction(()=>document.getElementById('diag')?.textContent?.includes('участки: 1'));await page.waitForFunction(()=>(window as any).__clientState?.connected===true);
+ assert.ok(sent.some(m=>m.type==='join_world'));
+ const yaw=await page.evaluate(()=>(window as any).__clientState.vehicle.yaw);await page.mouse.move(100,100);await page.mouse.move(1200,700);
+ assert.equal(await page.evaluate(()=>(window as any).__clientState.vehicle.yaw),yaw);assert.equal(await page.evaluate(()=>document.pointerLockElement===null),true);
  await page.keyboard.down('KeyW');await page.waitForTimeout(200);await page.keyboard.up('KeyW');assert.ok(sent.some(m=>m.type==='player_input'&&m.payload.throttle===1));
+ await page.keyboard.down('ArrowUp');await page.keyboard.down('ArrowLeft');await page.waitForTimeout(150);await page.keyboard.up('ArrowLeft');await page.keyboard.up('ArrowUp');
+ assert.ok(sent.some(m=>m.type==='player_input'&&m.payload.steer===1));
+ await page.keyboard.down('ArrowDown');await page.waitForTimeout(150);await page.keyboard.up('ArrowDown');assert.ok(sent.some(m=>m.type==='player_input'&&m.payload.brake===1));
+ assert.ok((await page.evaluate(()=>(window as any).__arrowDefaults)).every(Boolean),'Driving arrows must prevent page scrolling');
  await page.locator('#chat-form input').fill('<b>Привет</b>');await page.keyboard.press('ArrowLeft');assert.equal(await page.evaluate(()=>(window as any).__arrowDefaults.at(-1)),false,'Chat arrows must retain caret movement');await page.locator('#chat-form button').click();await page.locator('#chat-log').filter({hasText:'<b>Привет</b>'}).waitFor();assert.equal(await page.locator('#chat-log b').count(),0);
  await page.evaluate(()=>window.dispatchEvent(new CustomEvent('game:command',{detail:{type:'episode_join',payload:{scenarioId:'shared-priority',role:'P'}}})));await page.locator('#task').waitFor({state:'visible'});await page.locator('#task-options button').filter({hasText:'Только автобусу'}).click();await page.locator('#messages').filter({hasText:'Посмотри на положение автобуса.'}).waitFor();assert.equal(askCount,1);
  await page.keyboard.down('KeyW');await page.waitForTimeout(180);await page.keyboard.up('KeyW');assert.equal(sent.filter(m=>m.type==='player_input').at(-1).payload.throttle,0);
@@ -88,11 +87,11 @@ try{
 
  await page.locator('#task-options button').filter({hasText:'Никому',exact:true}).click();await page.locator('#task').waitFor({state:'hidden'});await page.locator('#talk').waitFor({state:'hidden'});
  assert.ok(sent.every(m=>!['vehicle_exit','vehicle_enter','vehicle.exit','vehicle.enter'].includes(m.type)));
- await page.click('#logout');await page.locator('#notice').filter({hasText:'Вы вышли из аккаунта'}).waitFor();
+ await page.click('#logout');await page.locator('#pull-rat').focus();await page.keyboard.press('Enter');await page.locator('#notice').filter({hasText:'Вы вышли из аккаунта'}).waitFor();
  assert.equal(await page.locator('#login').isVisible(),true);assert.equal(await page.locator('#chat').isVisible(),false);
  assert.deepEqual(authRequests.map(r=>r.action),['register','login','login','logout']);
  assert.deepEqual(authRequests.at(-1)?.credentials,{});
  assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
- console.log('PASS: production cockpit/WASD/arrows/reverse, fixed mouse, no exit/speedometer, cleanup, auth registration/login failure/login/logout, cookie check, v1 handshake/world ack, snapshots with bus/pedestrian/signal, personal task, single explanation/repeat, blocked input, safe chat; no page errors/external requests.');
+ console.log('PASS: auth registration/login failure/login/logout, no preview or reconnect buttons, input commands, fixed mouse, no speedometer, v1 handshake/world ack, snapshots, task, explanation, blocked input, safe chat; no page errors/external requests.');
  console.log('HTTP/WS/LLM replies are TEST FIXTURES. Real multiplayer, server grading, persistence, LAN and offline deployment remain unverified.');
 }finally{await browser.close();}

@@ -1,8 +1,8 @@
-import { login, register, logout } from './actions';
+import { login, logout } from './actions';
+import { notice } from '../ui/dom';
 
 export function bindAuthentication(connect: () => Promise<void>, disconnect: () => void) {
   const authForm = document.getElementById('auth') as HTMLFormElement;
-  const reconnectBtn = document.getElementById('reconnect');
   const logoutBtn = document.getElementById('logout');
 
   authForm?.addEventListener('submit', async (e) => {
@@ -11,18 +11,17 @@ export function bindAuthentication(connect: () => Promise<void>, disconnect: () 
       await login(Object.fromEntries(new FormData(authForm)));
       await connect();
     } catch (error) {
-      console.error('Login failed:', error);
+      notice(String(error).replace(/^Error:\s*/, ''));
     }
   });
-
-  reconnectBtn?.addEventListener('click', () => void connect());
 
   logoutBtn?.addEventListener('click', async () => {
     try {
       await logout();
       disconnect();
+      notice('Вы вышли из аккаунта');
     } catch (error) {
-      console.error('Logout failed:', error);
+      notice(String(error).replace(/^Error:\s*/, ''));
     }
   });
 }

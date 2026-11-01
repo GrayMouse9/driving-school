@@ -127,7 +127,8 @@ export function startApplication() {
 
   bindAuthentication(connect, () => network.disconnect());
 
-  $('preview').onclick = async () => {
+  const previewButton = document.getElementById('preview');
+  if (previewButton) previewButton.onclick = async () => {
     network.disconnect();
     clearWorld();
     session.clear();

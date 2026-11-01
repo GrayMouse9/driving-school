@@ -5,17 +5,19 @@ const base=process.env.BACKEND_URL??'http://localhost:18080';
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox','--enable-unsafe-swiftshader']});
 const wait=async(check:()=>boolean|Promise<boolean>,message:string)=>{const until=Date.now()+20000;while(Date.now()<until){if(await check())return;await new Promise(r=>setTimeout(r,80));}throw new Error(message);};
 try{
- const errors:string[]=[];const contexts=[];const pages=[];const frames:any[][]=[];const users:any[]=[];
+ const errors:string[]=[];const contexts=[];const pages=[];const frames:any[][]=[];const users:any[]=[];const accounts:{username:string;password:string}[]=[];
  const suffix=Date.now().toString(36);
  for(let i=0;i<2;i++){
   const context=await browser.newContext({viewport:{width:1365,height:900}});contexts.push(context);
   const credentials={username:`Прогон${i}-${suffix}`,password:'TestRoad26'};
-  const registered=await context.request.post(`${base}/api/v1/auth/register`,{data:credentials});assert.equal(registered.status(),201,await registered.text());
-  const logged=await context.request.post(`${base}/api/v1/auth/login`,{data:credentials});assert.equal(logged.status(),200,await logged.text());users.push((await logged.json()).user);
+  accounts.push(credentials);
+  users.push({username:credentials.username});
   const page=await context.newPage();pages.push(page);frames[i]=[];
   await page.addInitScript(()=>{window.addEventListener('game:state',e=>{(window as any).__clientState=(e as CustomEvent).detail;});});
   page.on('pageerror',e=>errors.push(String(e)));page.on('websocket',ws=>ws.on('framereceived',event=>{try{frames[i].push(JSON.parse(String(event.payload)));}catch{}}));
-  await page.goto(base);await page.click('#reconnect');await wait(()=>frames[i].some(m=>m.type==='world_load_status'&&m.payload.ready===true),`Client ${i}: no world-ready acknowledgment`);
+  await page.goto(base);await page.locator('#pull-rat').focus();await page.keyboard.press('Enter');
+  await page.locator('#open-register').click();await page.locator('#reg-form input[name="username"]').fill(credentials.username);await page.locator('#reg-form input[name="password"]').fill(credentials.password);await page.locator('#reg-form input[name="password2"]').fill(credentials.password);await page.locator('#reg-form button[type="submit"]').click();await page.locator('#reg-notice').filter({hasText:'Аккаунт создан'}).waitFor();await page.locator('#register-modal').waitFor({state:'hidden'});
+  await page.locator('#auth input[name="username"]').fill(credentials.username);await page.locator('#auth input[name="password"]').fill(credentials.password);await page.locator('#auth button[type="submit"]').click();await wait(()=>frames[i].some(m=>m.type==='world_load_status'&&m.payload.ready===true),`Client ${i}: no world-ready acknowledgment`);
  }
  await wait(()=>frames[0].some(m=>m.type==='players_snapshot'&&m.payload.players.length>=2),'Two real clients are not visible together');
  const starts=await Promise.all(pages.map(p=>p.evaluate(()=>(window as any).__clientState?.vehicle?.position)));
@@ -40,7 +42,7 @@ try{
  await pages[0].locator('#view').click({position:{x:650,y:400}});
  assert.equal(await pages[0].evaluate(()=>document.activeElement?.id),'view');
  const message=`LAN-ready-${suffix}`;await pages[0].locator('#chat-form input').fill(message);await pages[0].locator('#chat-form button').click();await pages[1].locator('#chat-log').filter({hasText:message}).waitFor();
- const saved=await pages[0].evaluate(()=>(window as any).__clientState.vehicle.position);const readyCount=frames[0].filter(m=>m.type==='world_load_status'&&m.payload.ready).length;await pages[0].reload();await pages[0].click('#reconnect');await wait(()=>frames[0].filter(m=>m.type==='world_load_status'&&m.payload.ready).length>readyCount,'Reconnect did not reload world');
+ const saved=await pages[0].evaluate(()=>(window as any).__clientState.vehicle.position);const readyCount=frames[0].filter(m=>m.type==='world_load_status'&&m.payload.ready).length;await pages[0].reload();await pages[0].locator('#pull-rat').focus();await pages[0].keyboard.press('Enter');await pages[0].locator('#auth input[name="username"]').fill(accounts[0].username);await pages[0].locator('#auth input[name="password"]').fill(accounts[0].password);await pages[0].locator('#auth button[type="submit"]').click();await wait(()=>frames[0].filter(m=>m.type==='world_load_status'&&m.payload.ready).length>readyCount,'Reconnect did not reload world');
  await wait(async()=>{const p=await pages[0].evaluate(()=>(window as any).__clientState?.vehicle?.position);return p&&Math.hypot(p.x-saved.x,p.z-saved.z)<1;},'Reconnect did not restore the server position');
  await pages[0].waitForFunction(()=>document.getElementById('diag')?.textContent?.includes('доля:'));const diagnostics=await pages[0].locator('#diag').textContent();const share=diagnostics?.match(/доля: ([\d.]+)%/);assert.ok(share,'No cache fraction');assert.ok(Number(share[1])<=10);
  await pages[0].screenshot({path:'/tmp/hahaton-real-multiplayer.png'});
