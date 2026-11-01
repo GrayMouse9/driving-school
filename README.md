@@ -39,40 +39,46 @@ server-data/
 docs/                  единая документация и визуальные референсы
 ```
 
-## Запуск собранного приложения
+## Запуск приложения через Docker Compose
 
-Нужны Node.js для сборки frontend, Go 1.22+ для сборки backend и PostgreSQL.
-Зависимости должны быть подготовлены заранее для полностью автономного запуска.
+Нужны запущенный Docker и Docker Compose. Frontend и backend собираются в один
+образ, PostgreSQL запускается в отдельном контейнере. Устанавливать Node.js, Go
+и PostgreSQL на серверный компьютер для этого способа не требуется.
 
-Из корня проекта:
-
-```bash
-npm --prefix frontend run build
-```
-
-Затем в терминале Ubuntu:
+При первом запуске из корня проекта создайте `.env` из шаблона, если файла ещё нет:
 
 ```bash
-cd /home/dasha/files/sem5/hahaton/backend
-# DATABASE_URL должна содержать строку подключения к вашей PostgreSQL.
-export LISTEN_ADDR=:18080
-export WORLD_FILE=../server-data/world/training-world.json
-export CLIENT_DIR=../frontend/dist
-go run ./cmd/server
+test -e .env || cp .env.example .env
 ```
 
-Без `DATABASE_URL` backend не запустится. При запуске создаются отсутствующие
-таблицы. Существующие данные сохраняются, переноса записей БД не требуется.
-Для production можно заранее собрать `go build -o /tmp/traffic-world-server ./cmd/server`
-и запускать полученный файл с теми же переменными окружения.
+Откройте `.env` и задайте непустой уникальный `POSTGRES_PASSWORD`. Файл `.env`
+исключён из Git. Сохраните его: после создания тома PostgreSQL простая замена
+пароля в `.env` не меняет пароль пользователя внутри существующей базы.
 
-Серверный браузер: **http://localhost:18080**.
-Другие ноутбуки: **http://<LAN-IP сервера>:18080**.
-Проверка backend и БД: **http://localhost:18080/api/v1/health**.
+Соберите и запустите приложение:
 
-Go раздаёт frontend и API/WS с одного адреса. Отдельный Vite для этого режима не нужен.
-В WSL может требоваться проброс порта Windows; подробности в
-[инструкции запуска](docs/setup.md).
+```bash
+docker compose up -d --build
+```
+
+При первой сборке нужны доступ к образам Docker и загрузка зависимостей. После
+сборки и загрузки образа PostgreSQL приложение можно запустить без сборки и
+скачивания образов:
+
+```bash
+docker compose up -d --no-build --pull never
+```
+
+Серверный браузер: **http://localhost:18080**. Другие ноутбуки в той же сети:
+**http://<LAN-IP сервера>:18080**. Проверка backend и БД:
+**http://localhost:18080/api/v1/health**; ожидается `{"status":"ok"}`.
+
+Для остановки выполните `docker compose down`. Данные PostgreSQL останутся в
+именованном томе и будут использованы при следующем запуске.
+
+Go раздаёт frontend и API/WS с одного адреса; отдельный Vite не нужен. При работе
+через WSL для других ноутбуков может потребоваться настройка сети, описанная в
+[разделе о Windows и WSL](docs/setup.md#windows--wsl).
 
 
 ## Разработка frontend
