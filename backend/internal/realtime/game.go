@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"driving-school/backend/internal/ai"
 	"driving-school/backend/internal/auth"
 	"driving-school/backend/internal/httpx"
 	"driving-school/backend/internal/player"
@@ -15,6 +16,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -45,42 +47,58 @@ type vehicleView struct {
 	Speed      float64 `json:"speed"`
 }
 type gamePlayer struct {
-	user           user
-	conn           *websocket.Conn
-	outgoing       chan envelope
-	session        [32]byte
-	slot           int
-	car            player.Vehicle
-	y              float64
-	input          player.Input
-	lastSeq        int64
-	hasSeq         bool
-	inputWindow    time.Time
-	inputCount     int
-	chatWindow     time.Time
-	chatCount      int
-	disconnectedAt time.Time
-	interest       world.Interest
-	confirmed      map[string]bool
-	previousChunk  string
-	locationID     string
-	tickBase       int64
-	persistFailed  bool
-	fetchFailures  int
-	worldBlocked   bool
+	training            *trainingState
+	trainingStatus      string
+	coachPending        string
+	coachCancel         context.CancelFunc
+	locationID          string
+	user                user
+	conn                *websocket.Conn
+	outgoing            chan envelope
+	session             [32]byte
+	slot                int
+	car                 player.Vehicle
+	y                   float64
+	input               player.Input
+	lastSeq             int64
+	hasSeq              bool
+	inputWindow         time.Time
+	inputCount          int
+	chatWindow          time.Time
+	chatCount           int
+	disconnectedAt      time.Time
+	interest            world.Interest
+	confirmed           map[string]bool
+	previousInterestKey string
+	tickBase            int64
+	persistFailed       bool
+	fetchFailures       int
+	worldBlocked        bool
 }
 type game struct {
-	mu           sync.Mutex
-	w            *world.World
-	db           *sql.DB
-	players      map[string]*gamePlayer
-	tick         int64
-	stop         chan struct{}
-	done         chan struct{}
-	locationMu   sync.Mutex
-	locations    map[string]string
-	locationWake chan struct{}
-	locationDone chan struct{}
+	observers        []observer
+	coach            *ai.Client
+	coachSlots       chan struct{}
+	locations        map[string]location
+	paths            map[string][]player.Point
+	zones            map[string][]player.Point
+	sharedAnswers    map[string]bool
+	busHidden        bool
+	walkStarted      time.Time
+	walkFinished     bool
+	locationMu       sync.Mutex
+	pendingLocations map[string]string
+	locationWake     chan struct{}
+	locationDone     chan struct{}
+	mu               sync.Mutex
+	w                *world.World
+	db               *sql.DB
+	players          map[string]*gamePlayer
+	roads            []player.CollisionBox
+	obstacles        []player.CollisionBox
+	tick             int64
+	stop             chan struct{}
+	done             chan struct{}
 }
 
 func NewGameHandler(db *sql.DB, worldData []byte) (http.Handler, func(), error) {
@@ -94,7 +112,19 @@ func NewGameHandler(db *sql.DB, worldData []byte) (http.Handler, func(), error) 
 	if len(w.Spawns) < 3 {
 		return nil, nil, errors.New("world requires at least three spawn points")
 	}
-	g := &game{w: w, db: db, players: make(map[string]*gamePlayer), stop: make(chan struct{}), done: make(chan struct{}), locations: make(map[string]string), locationWake: make(chan struct{}, 1), locationDone: make(chan struct{})}
+	g := &game{w: w, db: db, players: make(map[string]*gamePlayer), stop: make(chan struct{}), done: make(chan struct{}), pendingLocations: make(map[string]string), locationWake: make(chan struct{}, 1), locationDone: make(chan struct{})}
+	g.coach = ai.NewClient(os.Getenv("AI_SERVICE_URL"))
+	g.coachSlots = make(chan struct{}, 2)
+	for _, chunk := range w.Chunks {
+		for _, o := range chunk.Observers {
+			g.observers = append(g.observers, observer{ID: o.ID, ChunkID: chunk.Ref.ID, X: o.X, Z: o.Z, Yaw: o.Yaw, BodyYaw: o.Yaw})
+		}
+		g.roads = append(g.roads, chunk.Roads...)
+		g.obstacles = append(g.obstacles, chunk.Obstacles...)
+	}
+	if err := g.initTraining(); err != nil {
+		return nil, nil, err
+	}
 	hub := newSocketHub()
 	hub.game = g
 	go g.saveLocations()
@@ -146,6 +176,10 @@ func (g *game) join(ctx context.Context, r *http.Request, u user, session [32]by
 			return errors.New("VEHICLE_BUSY")
 		}
 		g.players[u.ID] = p
+		if err := g.restoreTraining(p); err != nil {
+			delete(g.players, u.ID)
+			return err
+		}
 	} else if p.conn != nil && p.conn != conn {
 		go p.conn.Close(websocket.StatusCode(4001), "SESSION_REPLACED")
 	}
@@ -163,8 +197,11 @@ func (g *game) join(ctx context.Context, r *http.Request, u user, session [32]by
 		return err
 	}
 	p.interest = interest
-	p.previousChunk = g.chunkAt(p.car.X, p.car.Z)
+	p.previousInterestKey = g.interestKey(p.car.X, p.car.Z)
 	p.locationID = g.fetchLocationID(p.car.X, p.car.Z)
+	if p.training != nil {
+		p.locationID = p.training.LocationID
+	}
 	g.queueLocation(u.ID, p.locationID)
 	hub.mu.Lock()
 	p.outgoing = hub.writers[conn]
@@ -174,7 +211,7 @@ func (g *game) join(ctx context.Context, r *http.Request, u user, session [32]by
 	}
 	player := g.playerView(p)
 	vehicle := g.vehicleView(p)
-	payload, err := json.Marshal(map[string]any{"selfId": u.ID, "tickRate": 20, "player": player, "vehicles": []vehicleView{vehicle}, "progress": pr, "episode": nil, "activeTask": nil})
+	payload, err := json.Marshal(map[string]any{"selfId": u.ID, "tickRate": 20, "player": player, "vehicles": []vehicleView{vehicle}, "progress": pr, "episode": nil, "activeTask": g.task(p)})
 	if err != nil {
 		return err
 	}
@@ -188,6 +225,7 @@ func (g *game) join(ctx context.Context, r *http.Request, u user, session [32]by
 	if !g.enqueue(p, envelope{Version: 1, Type: "world_interest", Payload: data}) {
 		return errors.New("connection write failed")
 	}
+	g.emitTraining(p)
 	return nil
 }
 
@@ -248,7 +286,7 @@ func (g *game) queueLocation(playerID, locationID string) {
 		return
 	}
 	g.locationMu.Lock()
-	g.locations[playerID] = locationID
+	g.pendingLocations[playerID] = locationID
 	g.locationMu.Unlock()
 	select {
 	case g.locationWake <- struct{}{}:
@@ -274,25 +312,39 @@ func (g *game) saveLocations() {
 
 func (g *game) flushLocations() {
 	g.locationMu.Lock()
-	pending := make(map[string]string, len(g.locations))
-	for playerID, locationID := range g.locations {
+	pending := make(map[string]string, len(g.pendingLocations))
+	for playerID, locationID := range g.pendingLocations {
 		pending[playerID] = locationID
 	}
 	g.locationMu.Unlock()
 	for playerID, locationID := range pending {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		err := storage.SetCurrentLocation(ctx, g.db, playerID, locationID)
+		var err error
+		if _, ok := g.locations[locationID]; ok {
+			err = storage.SetTrainingLocation(ctx, g.db, playerID, locationID)
+		} else {
+			err = storage.SetCurrentLocation(ctx, g.db, playerID, locationID)
+		}
 		cancel()
 		if err != nil {
 			fmt.Printf("save player location: %v\n", err)
 			continue
 		}
 		g.locationMu.Lock()
-		if g.locations[playerID] == locationID {
-			delete(g.locations, playerID)
+		if g.pendingLocations[playerID] == locationID {
+			delete(g.pendingLocations, playerID)
 		}
 		g.locationMu.Unlock()
 	}
+}
+
+func (g *game) interestKey(x, z float64) string {
+	id := g.chunkAt(x, z)
+	c, ok := g.w.Chunks[id]
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("%s:%t:%t:%t:%t", id, x-c.X <= world.PrefetchDistance, c.X+c.Size-x <= world.PrefetchDistance, z-c.Z <= world.PrefetchDistance, c.Z+c.Size-z <= world.PrefetchDistance)
 }
 func (g *game) positionSafe(x, z float64, ignore string) bool {
 	if g.chunkAt(x, z) == "" || math.IsNaN(x) || math.IsNaN(z) || math.IsInf(x, 0) || math.IsInf(z, 0) {
@@ -321,6 +373,9 @@ func (g *game) disconnect(userID string, conn *websocket.Conn) {
 		p.conn = nil
 		p.input = player.Input{}
 		p.car.Speed = 0
+		if p.training != nil && p.training.Phase == "driving" {
+			p.training.Phase = "awaiting_direction"
+		}
 		p.disconnectedAt = time.Now()
 		p.persistFailed = g.save(p) != nil
 	}
@@ -565,6 +620,10 @@ func (g *game) receiveInput(ctx context.Context, userID string, conn *websocket.
 	if p.hasSeq && input.Seq <= p.lastSeq {
 		return true
 	}
+	if p.training != nil {
+		p.input = player.Input{}
+		return true
+	}
 	p.lastSeq = input.Seq
 	p.hasSeq = true
 	if len(p.confirmed) > 0 && !p.worldBlocked {
@@ -577,7 +636,16 @@ func (g *game) receiveInput(ctx context.Context, userID string, conn *websocket.
 func (g *game) save(p *gamePlayer) error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	_, err := g.db.ExecContext(ctx, `INSERT INTO player_state (user_id,x,y,z,yaw) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id) DO UPDATE SET x=EXCLUDED.X,y=EXCLUDED.y,z=EXCLUDED.Z,yaw=EXCLUDED.yaw`, p.user.ID, p.car.X, p.y, p.car.Z, p.car.Yaw)
+	var err error
+	if p.training != nil {
+		raw, e := json.Marshal(p.training)
+		if e != nil {
+			return e
+		}
+		_, err = g.db.ExecContext(ctx, saveTrainingSQL, p.user.ID, p.car.X, p.y, p.car.Z, p.car.Yaw, raw)
+	} else {
+		_, err = g.db.ExecContext(ctx, `INSERT INTO player_state (user_id,x,y,z,yaw) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (user_id) DO UPDATE SET x=EXCLUDED.X,y=EXCLUDED.y,z=EXCLUDED.Z,yaw=EXCLUDED.yaw`, p.user.ID, p.car.X, p.y, p.car.Z, p.car.Yaw)
+	}
 	if err != nil {
 		fmt.Printf("save player state: %v\n", err)
 	}
@@ -624,29 +692,38 @@ func (g *game) update(now time.Time) {
 			continue
 		}
 		if len(p.confirmed) > 0 && !p.persistFailed && !p.worldBlocked {
-			obstacles := []player.CollisionBox{}
-			for _, c := range g.w.Chunks {
-				obstacles = append(obstacles, c.Obstacles...)
+			obstacles := make([]player.CollisionBox, 0, len(g.obstacles)+len(g.players))
+			for _, obstacle := range g.obstacles {
+				if !g.busHidden || obstacle.ObjectID != "shared-bus" {
+					obstacles = append(obstacles, obstacle)
+				}
 			}
 			for otherID, other := range g.players {
 				if otherID != id {
 					obstacles = append(obstacles, player.CollisionBox{X: other.car.X, Z: other.car.Z, Width: 2 * player.Radius, Length: 2 * player.Radius})
 				}
 			}
-			next := player.Step(p.car, p.input, obstacles, 0.05)
-			if p.confirmed[g.chunkAt(next.X, next.Z)] {
-				p.car = next
+			if p.training != nil {
+				g.stepTraining(p, obstacles, now)
 			} else {
-				p.car.Speed = 0
+				next := player.StepOnRoad(p.car, p.input, obstacles, g.roads, 0.05)
+				if p.confirmed[g.chunkAt(next.X, next.Z)] {
+					p.car = next
+				} else {
+					p.car.Speed = 0
+				}
 			}
 		}
 		currentLocationID := g.fetchLocationID(p.car.X, p.car.Z)
+		if p.training != nil {
+			currentLocationID = p.training.LocationID
+		}
 		if currentLocationID != "" && currentLocationID != p.locationID {
 			p.locationID = currentLocationID
 			g.queueLocation(p.user.ID, currentLocationID)
 		}
-		currentChunk := g.chunkAt(p.car.X, p.car.Z)
-		if currentChunk != p.previousChunk {
+		interestKey := g.interestKey(p.car.X, p.car.Z)
+		if interestKey != p.previousInterestKey {
 			previous := make([]string, 0, len(p.interest.Chunks))
 			for _, c := range p.interest.Chunks {
 				previous = append(previous, c.ID)
@@ -668,7 +745,7 @@ func (g *game) update(now time.Time) {
 					}
 				}
 				p.interest = interest
-				p.previousChunk = currentChunk
+				p.previousInterestKey = interestKey
 				if data, err := json.Marshal(interest); err == nil {
 					g.enqueue(p, envelope{Version: 1, Type: "world_interest", Payload: data})
 				}
@@ -685,6 +762,7 @@ func (g *game) update(now time.Time) {
 	if g.tick%2 != 0 {
 		return
 	}
+	g.updateObservers(.1)
 	for _, p := range g.players {
 		if p.conn == nil {
 			continue
@@ -701,7 +779,23 @@ func (g *game) update(now time.Time) {
 				vehicles = append(vehicles, g.vehicleView(q))
 			}
 		}
-		payload, err := json.Marshal(map[string]any{"tick": g.tick - p.tickBase, "serverTime": now.UnixMilli(), "ackInputSeq": p.lastSeq, "players": players, "vehicles": vehicles, "pedestrians": []any{}, "signals": []any{}})
+		hidden := []string{}
+		if g.busHidden {
+			hidden = append(hidden, "shared-bus")
+		}
+		pedestrians := []map[string]any{}
+		signals := []map[string]any{}
+		if allowed["c_-1_0"] {
+			signals = append(signals, map[string]any{"id": "pedestrians-green-light", "aspect": "green"})
+			if !g.walkStarted.IsZero() {
+				hidden = append(hidden, "pedestrians-walker-1", "pedestrians-walker-2")
+				distance := math.Min(10, time.Since(g.walkStarted).Seconds()*2.5)
+				for i, x := range []float64{-31, -34} {
+					pedestrians = append(pedestrians, map[string]any{"id": fmt.Sprintf("walking-person-%d", i), "position": vec3{X: math.Min(-24, x+distance), Z: 17.5}, "yaw": -math.Pi / 2, "moving": x+distance < -24})
+				}
+			}
+		}
+		payload, err := json.Marshal(map[string]any{"tick": g.tick - p.tickBase, "serverTime": now.UnixMilli(), "ackInputSeq": p.lastSeq, "players": players, "vehicles": vehicles, "pedestrians": pedestrians, "signals": signals, "observers": g.observerViews(allowed), "hiddenObjectIds": hidden})
 		if err == nil {
 			g.enqueue(p, envelope{Version: 1, Type: "players_snapshot", Payload: payload})
 		}

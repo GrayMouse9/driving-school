@@ -278,6 +278,18 @@ func (h *socketHub) handleMessage(ctx context.Context, r *http.Request, u user, 
 	if h.game != nil && message.Type == "player_input" {
 		return h.game.receiveInput(ctx, u.ID, conn, message)
 	}
+	if h.game != nil && message.Type == "answer_submit" {
+		return h.game.answer(ctx, u.ID, conn, message, h, hash)
+	}
+	if h.game != nil && message.Type == "maneuver_choose" {
+		return h.game.maneuver(ctx, u.ID, conn, message, h, hash)
+	}
+	if h.game != nil && message.Type == "npc_message" {
+		return h.game.askCoach(ctx, u.ID, conn, message, h, hash)
+	}
+	if h.game != nil && message.Type == "interact" {
+		return h.game.interactWithCoach(ctx, u.ID, conn, message, h, hash)
+	}
 	code, text := "NOT_IN_WORLD", "Сначала войдите в мир"
 	if h.game != nil && h.game.joined(u.ID, conn) {
 		code, text = "INVALID_MESSAGE", "Неизвестный тип сообщения"

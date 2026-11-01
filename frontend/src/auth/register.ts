@@ -1,6 +1,6 @@
 // @ts-ignore
 import "./register.css";
-import { register } from "./actions";
+import { API, http } from "../network/api";
 import { trimTransparent } from "./trim-image";
 
 const MARKUP = `
@@ -10,9 +10,9 @@ const MARKUP = `
       <div class="reg-form-wrap">
         <h1 class="auth-title">Регистрация</h1>
         <form id="reg-form" class="auth-form" novalidate>
-          <input name="username" class="auth-input" placeholder="Придумайте имя" aria-label="Придумайте имя" autocomplete="username" required>
-          <input name="password" class="auth-input" type="password" placeholder="Придумайте пароль" aria-label="Придумайте пароль" autocomplete="new-password" required>
-          <input name="password2" class="auth-input" type="password" placeholder="Повторите пароль" aria-label="Повторите пароль" autocomplete="new-password" required>
+          <input name="username" class="auth-input" placeholder="Придумайте имя" autocomplete="username" required maxlength="40">
+          <input name="password" class="auth-input" type="password" placeholder="Придумайте пароль" autocomplete="new-password" required minlength="8" maxlength="15">
+          <input name="password2" class="auth-input" type="password" placeholder="Повторите пароль" autocomplete="new-password" required>
           <button type="submit" class="btn-primary">Создать аккаунт</button>
         </form>
           <p id="reg-notice" class="reg-note" role="status" aria-live="polite"></p>
@@ -85,14 +85,13 @@ export function initRegister() {
     const data = Object.fromEntries(new FormData(form)) as Record<string, string>;
     const username = String(data.username ?? "").trim();
 
-    if (Array.from(username).length < 1 || Array.from(username).length > 40) return say("Имя: от 1 до 40 символов", "error");
-    const passwordLength = Array.from(String(data.password ?? "")).length;
-    if (passwordLength < 8 || passwordLength > 15) return say("Пароль: от 8 до 15 символов", "error");
+    if (username.length < 2) return say("Логин слишком короткий", "error");
+    if (Array.from(String(data.password ?? "")).length < 8 || Array.from(String(data.password ?? "")).length > 15) return say("Пароль: от 8 до 15 символов", "error");
     if (data.password !== data.password2) return say("Пароли не совпадают", "error");
 
     say("Регистрация…");
     try {
-      await register({ username, password: data.password });
+      await http(`${API}/auth/register`, { username, password: data.password });
       say("Аккаунт создан! Теперь войдите.", "ok");
       closeTimer = window.setTimeout(() => close(username), 1200);
     } catch (error) {

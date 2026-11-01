@@ -39,10 +39,14 @@ func VerifyPassword(encoded, password string) bool {
 }
 
 func ValidateCredentials(username, password string) bool {
+	return validateCredentials(username, password, 8)
+}
+
+func validateCredentials(username, password string, minimumPasswordLength int) bool {
 	if !utf8.ValidString(username) || !utf8.ValidString(password) {
 		return false
 	}
 	usernameLength := utf8.RuneCountInString(strings.TrimSpace(username))
 	passwordLength := utf8.RuneCountInString(password)
-	return usernameLength >= 1 && usernameLength <= 40 && passwordLength >= 8 && passwordLength <= 15
+	return usernameLength >= 1 && usernameLength <= 40 && passwordLength >= minimumPasswordLength && passwordLength <= 15
 }

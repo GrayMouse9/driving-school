@@ -3,8 +3,11 @@ import "./style.css";
 import { initAuthPull } from "./auth-pull";
 import { initRegister } from "./register";
 
-export function initAuth() {
-document.querySelector("#auth-root")!.outerHTML = `
+import { mountUI } from "../ui/layout";
+
+mountUI();
+const sessionControls = ['reconnect', 'preview'].map(id => document.getElementById(id)!);
+document.querySelector("#login")!.outerHTML = `
   <section id="login" data-state="closed">
     <div id="pull">
       <div class="auth-sheet" id="auth-panel" inert>
@@ -37,8 +40,8 @@ document.querySelector("#auth-root")!.outerHTML = `
     </div>
   </section>
 `;
+document.querySelector('.sheet-links')!.append(...sessionControls);
 
 // Инициализация анимаций
 initAuthPull();
 initRegister();
-}

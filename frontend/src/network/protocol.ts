@@ -25,6 +25,7 @@ export type Snapshot = {
   tick: number; serverTime: number; ackInputSeq: number;
   players: Player[]; vehicles: Vehicle[];
   pedestrians: PedestrianState[]; signals: SignalState[];
+  observers?: ObserverState[];
 };
 export type ActionResult = { action: 'vehicle_enter' | 'vehicle_exit' | 'chat_send' | 'episode_ready' | 'episode_leave'; ok: true };
 export type ChatMessage = { senderId: Id; username: string; text: string; serverTime: number };
@@ -93,6 +94,7 @@ export type EpisodeState = {
   activeDriver: null;
 };
 export type PedestrianState = {id:Id;position:Vec3;yaw:number;moving:boolean};
+export type ObserverState = {id:Id;yaw:number};
 export type SignalState = {id:Id;aspect:'red'|'yellow'|'green'};
 export type VisualHint = {
   kind: 'highlight'; objectIds: Id[]; pathIds: Id[]; zoneIds: Id[];

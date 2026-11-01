@@ -42,6 +42,7 @@ export class Network extends EventTarget {
   ws.onerror=()=>{if(this.ws!==ws)return;this.disconnect();this.status('Ошибка соединения');};
  }
  send(type:string,payload:unknown,id?:string){if(!this.ready)return false;
+  if((type==='answer_submit'||type==='maneuver_choose')&&!this.worldReady)return false;
   if(type==='vehicle_enter'||type==='vehicle_exit'||type==='vehicle.enter'||type==='vehicle.exit')return false;
   if(type==='player_input')return this.worldReady&&this.raw(type,payload);
   const outgoingId=id??(type==='ping'?undefined:requestId());if(type==='world_loaded')this.expectedLoadAck=outgoingId;return this.raw(type,payload,outgoingId);
