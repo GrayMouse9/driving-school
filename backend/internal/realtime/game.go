@@ -63,19 +63,24 @@ type gamePlayer struct {
 	interest       world.Interest
 	confirmed      map[string]bool
 	previousChunk  string
+	locationID     string
 	tickBase       int64
 	persistFailed  bool
 	fetchFailures  int
 	worldBlocked   bool
 }
 type game struct {
-	mu      sync.Mutex
-	w       *world.World
-	db      *sql.DB
-	players map[string]*gamePlayer
-	tick    int64
-	stop    chan struct{}
-	done    chan struct{}
+	mu           sync.Mutex
+	w            *world.World
+	db           *sql.DB
+	players      map[string]*gamePlayer
+	tick         int64
+	stop         chan struct{}
+	done         chan struct{}
+	locationMu   sync.Mutex
+	locations    map[string]string
+	locationWake chan struct{}
+	locationDone chan struct{}
 }
 
 func NewGameHandler(db *sql.DB, worldData []byte) (http.Handler, func(), error) {
@@ -89,12 +94,13 @@ func NewGameHandler(db *sql.DB, worldData []byte) (http.Handler, func(), error) 
 	if len(w.Spawns) < 3 {
 		return nil, nil, errors.New("world requires at least three spawn points")
 	}
-	g := &game{w: w, db: db, players: make(map[string]*gamePlayer), stop: make(chan struct{}), done: make(chan struct{})}
+	g := &game{w: w, db: db, players: make(map[string]*gamePlayer), stop: make(chan struct{}), done: make(chan struct{}), locations: make(map[string]string), locationWake: make(chan struct{}, 1), locationDone: make(chan struct{})}
 	hub := newSocketHub()
 	hub.game = g
+	go g.saveLocations()
 	go g.run()
 	var once sync.Once
-	shutdown := func() { once.Do(func() { close(g.stop); <-g.done }) }
+	shutdown := func() { once.Do(func() { close(g.stop); <-g.done; <-g.locationDone }) }
 	return newHandler(db, hub), shutdown, nil
 }
 
@@ -158,6 +164,8 @@ func (g *game) join(ctx context.Context, r *http.Request, u user, session [32]by
 	}
 	p.interest = interest
 	p.previousChunk = g.chunkAt(p.car.X, p.car.Z)
+	p.locationID = g.fetchLocationID(p.car.X, p.car.Z)
+	g.queueLocation(u.ID, p.locationID)
 	hub.mu.Lock()
 	p.outgoing = hub.writers[conn]
 	hub.mu.Unlock()
@@ -227,6 +235,64 @@ func (g *game) chunkAt(x, z float64) string {
 		}
 	}
 	return ""
+}
+
+// fetchLocationID temporarily uses the chunk ID until the actual logic for
+// identifying a player's location is implemented.
+func (g *game) fetchLocationID(x, z float64) string {
+	return g.chunkAt(x, z)
+}
+
+func (g *game) queueLocation(playerID, locationID string) {
+	if locationID == "" {
+		return
+	}
+	g.locationMu.Lock()
+	g.locations[playerID] = locationID
+	g.locationMu.Unlock()
+	select {
+	case g.locationWake <- struct{}{}:
+	default:
+	}
+}
+
+func (g *game) saveLocations() {
+	defer close(g.locationDone)
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-g.stop:
+			g.flushLocations()
+			return
+		case <-g.locationWake:
+		case <-ticker.C:
+		}
+		g.flushLocations()
+	}
+}
+
+func (g *game) flushLocations() {
+	g.locationMu.Lock()
+	pending := make(map[string]string, len(g.locations))
+	for playerID, locationID := range g.locations {
+		pending[playerID] = locationID
+	}
+	g.locationMu.Unlock()
+	for playerID, locationID := range pending {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		err := storage.SetCurrentLocation(ctx, g.db, playerID, locationID)
+		cancel()
+		if err != nil {
+			fmt.Printf("save player location: %v\n", err)
+			continue
+		}
+		g.locationMu.Lock()
+		if g.locations[playerID] == locationID {
+			delete(g.locations, playerID)
+		}
+		g.locationMu.Unlock()
+	}
 }
 func (g *game) positionSafe(x, z float64, ignore string) bool {
 	if g.chunkAt(x, z) == "" || math.IsNaN(x) || math.IsNaN(z) || math.IsInf(x, 0) || math.IsInf(z, 0) {
@@ -573,6 +639,11 @@ func (g *game) update(now time.Time) {
 			} else {
 				p.car.Speed = 0
 			}
+		}
+		currentLocationID := g.fetchLocationID(p.car.X, p.car.Z)
+		if currentLocationID != "" && currentLocationID != p.locationID {
+			p.locationID = currentLocationID
+			g.queueLocation(p.user.ID, currentLocationID)
 		}
 		currentChunk := g.chunkAt(p.car.X, p.car.Z)
 		if currentChunk != p.previousChunk {

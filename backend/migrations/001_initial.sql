@@ -38,3 +38,9 @@ CREATE TABLE IF NOT EXISTS mistakes (
     count integer NOT NULL CHECK (count >= 0),
     PRIMARY KEY (user_id, topic, kind)
 );
+CREATE TABLE IF NOT EXISTS location (
+    player_id text PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    location_id text NOT NULL,
+    description text,
+    correct_answer text
+);
