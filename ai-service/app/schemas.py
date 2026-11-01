@@ -6,7 +6,7 @@ Action = Literal["forward", "left", "right", "stop"]
 
 
 class ActionRequest(BaseModel):
-    location_id: int
+    location_id: str | int
 
     title: str
     description: str
@@ -16,7 +16,12 @@ class ActionRequest(BaseModel):
 
 
 class QuestionRequest(BaseModel):
-    location_id: int | None = None
+    location_id: str | int | None = None
+
+    title: str | None = None
+    description: str | None = None
+    correct_answer: Action | None = None
+    answer: Action | None = None
 
     message: str = Field(
         min_length=1,

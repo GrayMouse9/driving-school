@@ -2,30 +2,50 @@ import { $ } from './dom';
 import type { Session } from '../game/interactions/session';
 export function bindTaskView(session: Session, keys: Set<string>) {
     function renderTask() {
-        const task = session.task;
-        $('task').hidden = !task;
-        if (task) {
-            $('task-source').textContent = task.sourceLabel;
-            $('task-title').textContent = task.title;
-            $('task-prompt').textContent = task.prompt;
+        const actions = $('instructor-actions');
+        actions.replaceChildren();
+        const phase = session.motion?.phase;
+        const waiting = phase === 'awaiting_direction';
+        const task = !phase || phase === 'question' ? session.task : undefined;
+        const card = session.motion ? undefined : session.task;
+        $('task').hidden = !card;
+        if (card) {
+            $('task-source').textContent = card.sourceLabel;
+            $('task-title').textContent = card.title;
+            $('task-prompt').textContent = card.prompt;
             $('task-options').replaceChildren();
-            if (task.kind === 'choice')
-                for (const option of task.options) {
-                    const b = document.createElement('button');
-                    b.textContent = option.text;
-                    b.disabled = session.answerPending || !!session.result?.correct;
-                    b.onclick = () => {
-                        session.answer(option.id);
-                    };
-                    $('task-options').append(b);
-                }
-            $('task-feedback').textContent = session.result?.explanation ?? (task.kind === 'driving' ? 'Выполните манёвр. Результат проверяет сервер.' : 'Выберите ответ.');
+            if (card.kind === 'choice') for (const option of card.options) {
+                const button = document.createElement('button');
+                button.textContent = option.text;
+                button.disabled = session.answerPending || !!session.result?.correct;
+                button.onclick = () => session.answer(option.id);
+                $('task-options').append(button);
+            }
+            $('task-feedback').textContent = session.result?.explanation ?? (card.kind === 'driving' ? 'Выполните манёвр. Результат проверяет сервер.' : 'Выберите ответ.');
         }
+        if (waiting) {
+            const labels: Record<string, string> = {left:'A / ← — налево',forward:'W / ↑ — прямо',right:'D / → — направо'};
+            for (const action of session.motion!.allowedActions) {
+                const button = document.createElement('button');
+                button.textContent = labels[action] ?? action;
+                button.disabled = session.maneuverPending;
+                button.onclick = () => session.maneuver(action);
+                actions.append(button);
+            }
+        } else if (task?.kind === 'choice') {
+            for (const option of task.options) {
+                const button = document.createElement('button');
+                button.textContent = option.text;
+                button.disabled = session.answerPending || !!session.result?.correct;
+                button.onclick = () => session.answer(option.id);
+                actions.append(button);
+            }
+        }
+        actions.hidden = !actions.childElementCount;
         const episode = session.episode;
         $('episode-status').textContent = episode ? `Роль ${episode.selfRole ?? '—'} · ${episode.phase}${episode.selfAnswerCorrect ? ' · ответ принят' : ''}` : 'Для общего перекрёстка выберите роль.';
         $<HTMLButtonElement>('episode-ready').disabled = !episode || !['staging', 'paused'].includes(episode.phase);
-        if (session.blocked)
-            keys.clear();
+        if (session.blocked) keys.clear();
     }
     session.addEventListener('change', renderTask);
     return renderTask;

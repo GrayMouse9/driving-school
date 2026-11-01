@@ -1,14 +1,17 @@
 import { $ } from '../../ui/dom';
 import type { GameScene } from '../rendering/scene';
 import type { Agent } from '../entities/types';
-export function bindPlayerInput(game: GameScene, keys: Set<string>, blocked: () => boolean, interact: (agent?: Agent) => void, closeTalk: () => void) {
+export function bindPlayerInput(game: GameScene, keys: Set<string>, blocked: () => boolean, interact: (agent?: Agent) => void, closeTalk: () => void,chooseAction:(action:string)=>boolean=()=>false) {
     window.addEventListener('keydown', e => {
         if (e.code === 'Escape') {
             closeTalk();
             return;
         }
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || blocked())
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
             return;
+        const action=({KeyA:'left',ArrowLeft:'left',KeyW:'forward',ArrowUp:'forward',KeyD:'right',ArrowRight:'right',KeyS:'stop',ArrowDown:'stop'} as Record<string,string>)[e.code];
+        if(action&&!e.repeat&&chooseAction(action)){e.preventDefault();return;}
+        if(blocked())return;
         if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyE', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code))
             e.preventDefault();
         keys.add(e.code);

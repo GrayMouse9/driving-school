@@ -1,4 +1,5 @@
 import * as T from "three";
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import type {Agent} from "../entities/types";
 import type {Chunk} from "../world/types";
 import type { VisualHint, SignalState } from "../../network/protocol";
@@ -115,6 +116,21 @@ export function roadGeometry(road: Road, localRoads: Road[], zones: Zone[] = [])
   for (let z = -road.length / 2 + 2; z < road.length / 2; z += 6)
     for (const [a, b] of uncut(Math.max(-road.length / 2, z - 1.4), Math.min(road.length / 2, z + 1.4), cuts))
       if (b - a > 0.001) box(group, 0, 0.06, (a + b) / 2, 0.12, 0.012, b - a, 0xfff7d5);
+  const batches=new Map<number,T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>[]>();
+  for(const child of [...group.children]){
+    const mesh=child as T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>;
+    const key=mesh.material.color.getHex();const list=batches.get(key)??[];list.push(mesh);batches.set(key,list);
+  }
+  for(const meshes of batches.values()){
+    if(meshes.length<2)continue;
+    const transformed=meshes.map(mesh=>{mesh.updateMatrix();return mesh.geometry.clone().applyMatrix4(mesh.matrix);});
+    const geometry=mergeGeometries(transformed,false);
+    for(const source of transformed)source.dispose();
+    if(!geometry)continue;
+    const material=meshes[0].material;
+    for(const mesh of meshes){group.remove(mesh);mesh.geometry.dispose();if(mesh.material!==material)mesh.material.dispose();}
+    const batch=new T.Mesh(geometry,material);batch.castShadow=true;batch.receiveShadow=true;group.add(batch);
+  }
   return group;
 }
 
@@ -213,7 +229,9 @@ export function sceneryGeometry(object: Chunk["objects"][number]) {
   group.position.copy(object.position);
   group.rotation.y = object.yaw;
   const { x: width, y: height, z: depth } = object.size;
-  if (object.kind === "bus" || object.kind === "pedestrian") {
+  if (object.kind === "observer") {
+    group.add(observerGeometry(object.color));
+  } else if (object.kind === "bus" || object.kind === "pedestrian") {
     group.add(object.kind === "bus" ? vehicleGeometry("bus") : pedestrianGeometry());
   } else if (object.kind === "tree") {
     const trunk = new T.Mesh(new T.CylinderGeometry(Math.min(width, depth) * 0.07, Math.min(width, depth) * 0.1, height * 0.48, 5),
@@ -346,6 +364,43 @@ export function pedestrianGeometry() {
     box(g, x * 2.25, 1.02, 0, 0.12, 0.58, 0.16, 0xf2cfad);
   }
   return g;
+}
+
+function observerGeometry(color: string) {
+  const body=pedestrianGeometry();
+  (body.children[0] as T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>).material.color.set(color);
+  const skull=body.children[1] as T.Mesh;
+  body.remove(skull);
+  const head=new T.Group();head.name='observer-head';head.position.y=1.38;
+  skull.position.y-=head.position.y;head.add(skull);
+  for(const x of [-.075,.075]) {
+    const white=new T.Mesh(new T.SphereGeometry(1,8,6),new T.MeshStandardMaterial({color:0xffffff}));
+    white.position.set(x,.23,-.166);white.scale.set(.063,.046,.035);head.add(white);
+    const pupil=new T.Mesh(new T.SphereGeometry(.025,8,6),new T.MeshStandardMaterial({color:0x263541}));
+    pupil.position.set(x,.23,-.199);pupil.scale.z=.55;head.add(pupil);
+  }
+  box(head,0,.15,-.2,.06,.08,.08,0xf2cfad);
+  batchObserverParts(body);batchObserverParts(head);
+  body.add(head);
+  return body;
+}
+
+function batchObserverParts(group:T.Group) {
+  const batches=new Map<number,T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>[]>();
+  for(const child of group.children){
+    const mesh=child as T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>;
+    const key=mesh.material.color.getHex(),list=batches.get(key)??[];list.push(mesh);batches.set(key,list);
+  }
+  for(const meshes of batches.values()){
+    if(meshes.length<2)continue;
+    const parts=meshes.map(mesh=>{mesh.updateMatrix();return mesh.geometry.clone().applyMatrix4(mesh.matrix);});
+    const merged=mergeGeometries(parts,false);for(const part of parts)part.dispose();
+    if(!merged)continue;
+    const material=meshes[0].material;
+    for(const mesh of meshes){group.remove(mesh);mesh.geometry.dispose();if(mesh.material!==material)mesh.material.dispose();}
+    group.add(new T.Mesh(merged,material));
+  }
+  return group;
 }
 
 export function signalGeometry() {

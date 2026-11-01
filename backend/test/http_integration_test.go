@@ -68,6 +68,17 @@ func TestMultiplayerJoinWithPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	fixture := fixtureWithObstacle(t, loadFixture(t))
+	// Place the third player near a chunk boundary so the interest set can
+	// exercise a reduction from multiple chunks with distance-based prefetch.
+	var fixtureWorld map[string]any
+	if err := json.Unmarshal(fixture, &fixtureWorld); err != nil {
+		t.Fatal(err)
+	}
+	fixtureWorld["spawnPoints"].([]any)[2].(map[string]any)["x"] = float64(58)
+	fixture, err = json.Marshal(fixtureWorld)
+	if err != nil {
+		t.Fatal(err)
+	}
 	handler, shutdown, err := server.NewGameHandler(db, fixture)
 	if err != nil {
 		t.Fatal(err)

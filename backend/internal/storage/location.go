@@ -13,6 +13,17 @@ type Location struct {
 	CorrectAnswer sql.NullString
 }
 
+// SetTrainingLocation copies the current card's context from the server catalog.
+// Repeated saves preserve changes to the same player's active situation.
+func SetTrainingLocation(ctx context.Context, db *sql.DB, playerID, locationID string) error {
+	_, err := db.ExecContext(ctx, `INSERT INTO location(player_id,location_id,description,correct_answer)
+	 SELECT $1,id,description,correct_answer FROM locations WHERE id=$2
+	 ON CONFLICT(player_id) DO UPDATE SET location_id=EXCLUDED.location_id,
+	 description=CASE WHEN location.location_id=EXCLUDED.location_id THEN coalesce(location.description,EXCLUDED.description) ELSE EXCLUDED.description END,
+	 correct_answer=CASE WHEN location.location_id=EXCLUDED.location_id THEN coalesce(location.correct_answer,EXCLUDED.correct_answer) ELSE EXCLUDED.correct_answer END`, playerID, locationID)
+	return err
+}
+
 func SetCurrentLocation(ctx context.Context, db *sql.DB, playerID, locationID string) error {
 	_, err := db.ExecContext(ctx, `INSERT INTO location (player_id, location_id) VALUES ($1,$2)
 		ON CONFLICT (player_id) DO UPDATE SET
