@@ -68,6 +68,10 @@ type gamePlayer struct {
 	persistFailed  bool
 	fetchFailures  int
 	worldBlocked   bool
+	telemetry      telemetry
+	telemetryAt    time.Time
+	connectedAt    time.Time
+	manualLocation bool
 }
 type game struct {
 	mu           sync.Mutex
@@ -150,8 +154,11 @@ func (g *game) join(ctx context.Context, r *http.Request, u user, session [32]by
 		go p.conn.Close(websocket.StatusCode(4001), "SESSION_REPLACED")
 	}
 	p.conn = conn
+	p.connectedAt = time.Now()
+	p.manualLocation = false
 	p.session = session
 	p.disconnectedAt = time.Time{}
+	p.telemetryAt = time.Time{}
 	p.input = player.Input{}
 	p.lastSeq = -1
 	p.hasSeq = false
@@ -274,12 +281,8 @@ func (g *game) saveLocations() {
 
 func (g *game) flushLocations() {
 	g.locationMu.Lock()
-	pending := make(map[string]string, len(g.locations))
+	defer g.locationMu.Unlock()
 	for playerID, locationID := range g.locations {
-		pending[playerID] = locationID
-	}
-	g.locationMu.Unlock()
-	for playerID, locationID := range pending {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		err := storage.SetCurrentLocation(ctx, g.db, playerID, locationID)
 		cancel()
@@ -287,11 +290,7 @@ func (g *game) flushLocations() {
 			fmt.Printf("save player location: %v\n", err)
 			continue
 		}
-		g.locationMu.Lock()
-		if g.locations[playerID] == locationID {
-			delete(g.locations, playerID)
-		}
-		g.locationMu.Unlock()
+		delete(g.locations, playerID)
 	}
 }
 func (g *game) positionSafe(x, z float64, ignore string) bool {
@@ -641,7 +640,8 @@ func (g *game) update(now time.Time) {
 			}
 		}
 		currentLocationID := g.fetchLocationID(p.car.X, p.car.Z)
-		if currentLocationID != "" && currentLocationID != p.locationID {
+		if currentLocationID != "" && currentLocationID != p.locationID && (!p.manualLocation || g.chunkAt(p.car.X, p.car.Z) != p.previousChunk) {
+			p.manualLocation = false
 			p.locationID = currentLocationID
 			g.queueLocation(p.user.ID, currentLocationID)
 		}

@@ -193,6 +193,7 @@ export function startApplication() {
     frames++;
     if (now - fpsStart > 1000) {
       fps = Math.round(frames * 1000 / (now - fpsStart));
+      network.setFPS(fps);
       fpsStart = now;
       frames = 0;
     }

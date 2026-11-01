@@ -9,6 +9,10 @@ services:
       LISTEN_ADDR: ":18080"
       WORLD_FILE: ${WORLD_FILE:?Set WORLD_FILE in .env}
       CLIENT_DIR: ${CLIENT_DIR:?Set CLIENT_DIR in .env}
+      ADMIN_USER_ID: ${ADMIN_USER_ID:-}
+      AI_SYSTEM_PROMPT_FILE: /app/state/system-prompt.txt
+    volumes:
+      - admin-state:/app/state
     ports:
       - "18080:18080"
     depends_on:
@@ -40,3 +44,4 @@ services:
 
 volumes:
   postgres-data:
+  admin-state:

@@ -14,6 +14,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
 from app.config import OLLAMA_BASE_URL, OLLAMA_MODEL
+from app.prompt import current_system_prompt
 from app.schemas import Action
 
 
@@ -47,23 +48,6 @@ llm = ChatOllama(
     base_url=OLLAMA_BASE_URL,
     temperature=0.2
 )
-
-
-BASE_SYSTEM_PROMPT = """
-Ты — дружелюбный виртуальный инструктор по вождению.
-
-Твоя задача — помогать игроку изучать правила дорожного движения.
-
-Общие правила:
-
-- Всегда отвечай на русском языке.
-- Объясняй понятно, спокойно и доброжелательно.
-- Не унижай игрока и не используй агрессивный тон.
-- Не придумывай обстоятельства дорожной ситуации.
-- Не выдумывай номера пунктов ПДД.
-- Учитывай предыдущие сообщения в истории этого игрока.
-- Не оспаривай результаты программной проверки действий.
-"""
 
 
 # ==========================================
@@ -159,7 +143,7 @@ def coach_node(state: GameState) -> dict:
 """
 
         system_message = SystemMessage(
-            content=BASE_SYSTEM_PROMPT + "\n" + task_prompt
+            content=current_system_prompt() + "\n" + task_prompt
         )
 
         # Передаём системную инструкцию и историю диалога в LLM.
@@ -191,7 +175,7 @@ def coach_node(state: GameState) -> dict:
 """
 
         system_message = SystemMessage(
-            content=BASE_SYSTEM_PROMPT + "\n" + task_prompt
+            content=current_system_prompt() + "\n" + task_prompt
         )
 
         response = llm.invoke(
