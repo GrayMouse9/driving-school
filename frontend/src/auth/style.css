@@ -358,10 +358,9 @@ footer small {
   background: #e4e4e4;
 }
 
-/* упавшая мышь: появляется, только когда окно открыто */
 .fallen-mouse {
   position: absolute;
-  left: -100px;
+  left: -150px;
   bottom: 0;
   width: calc(var(--ring) * 1);
   height: auto;
