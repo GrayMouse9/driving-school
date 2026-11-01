@@ -3,10 +3,11 @@ import "./style.css";
 import { initAuthPull } from "./auth-pull";
 import { initRegister } from "./register";
 
-// ТОЛЬКО HTML авторизации
-document.querySelector("#app")!.innerHTML = `
-  <canvas id="view" aria-label="Учебный город"></canvas>
-  
+import { mountUI } from "../ui/layout";
+
+mountUI();
+const sessionControls = ['reconnect', 'preview'].map(id => document.getElementById(id)!);
+document.querySelector("#login")!.outerHTML = `
   <section id="login" data-state="closed">
     <div id="pull">
       <div class="auth-sheet" id="auth-panel" inert>
@@ -38,32 +39,8 @@ document.querySelector("#app")!.innerHTML = `
       </button>
     </div>
   </section>
-  
-  
-  <header>
-    <div class="brand">АВТОШКОЛА <span>Говорящий город</span></div>
-    <div id="connection">Нет подключения</div>
-  </header>
-  <aside id="diag" class="panel"></aside>
-  <footer>
-    <div id="hint">WASD — движение · Пробел — тормоз · E — выйти / сесть · мышь — обзор</div>
-    <strong><span id="speed">0</span> <small>км/ч</small></strong>
-  </footer>
-
-  <section id="talk" class="panel" hidden>
-    <button id="close-talk" class="close">×</button>
-    <h2 id="sign-name">Знак-помощник</h2>
-    <div id="messages" aria-live="polite"></div>
-    <form id="ask"><input name="question" placeholder="Вопрос знаку…" maxlength="1000" required><button>Спросить</button></form>
-  </section>
-  <section id="chat" class="panel" hidden>
-    <div id="chat-log" aria-live="polite"></div>
-    <form id="chat-form"><input name="text" placeholder="Сообщение участникам" maxlength="500" required><button>↗</button></form>
-  </section>
-
-  <div id="feedback" role="status" hidden></div>
-  <div id="preview-banner" hidden>ТЕСТ СЦЕНЫ · без сервера, ИИ, сохранений и мультиплеера <button id="leave-preview">Завершить</button></div>
 `;
+document.querySelector('.sheet-links')!.append(...sessionControls);
 
 // Инициализация анимаций
 initAuthPull();

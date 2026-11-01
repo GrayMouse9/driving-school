@@ -1,6 +1,6 @@
 // @ts-ignore
 import "./register.css";
-import { http } from "../network/api";
+import { API, http } from "../network/api";
 import { trimTransparent } from "./trim-image";
 
 const MARKUP = `
@@ -11,7 +11,7 @@ const MARKUP = `
         <h1 class="auth-title">Регистрация</h1>
         <form id="reg-form" class="auth-form" novalidate>
           <input name="username" class="auth-input" placeholder="Придумайте имя" autocomplete="username" required maxlength="40">
-          <input name="password" class="auth-input" type="password" placeholder="Придумайте пароль" autocomplete="new-password" required minlength="4">
+          <input name="password" class="auth-input" type="password" placeholder="Придумайте пароль" autocomplete="new-password" required minlength="8" maxlength="15">
           <input name="password2" class="auth-input" type="password" placeholder="Повторите пароль" autocomplete="new-password" required>
           <button type="submit" class="btn-primary">Создать аккаунт</button>
         </form>
@@ -86,12 +86,12 @@ export function initRegister() {
     const username = String(data.username ?? "").trim();
 
     if (username.length < 2) return say("Логин слишком короткий", "error");
-    if (String(data.password ?? "").length < 4) return say("Пароль: минимум 4 символа", "error");
+    if (Array.from(String(data.password ?? "")).length < 8 || Array.from(String(data.password ?? "")).length > 15) return say("Пароль: от 8 до 15 символов", "error");
     if (data.password !== data.password2) return say("Пароли не совпадают", "error");
 
     say("Регистрация…");
     try {
-      await http("/api/auth/register", { username, password: data.password });
+      await http(`${API}/auth/register`, { username, password: data.password });
       say("Аккаунт создан! Теперь войдите.", "ok");
       closeTimer = window.setTimeout(() => close(username), 1200);
     } catch (error) {

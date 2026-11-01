@@ -9,10 +9,15 @@ services:
       LISTEN_ADDR: ":18080"
       WORLD_FILE: ${WORLD_FILE:?Set WORLD_FILE in .env}
       CLIENT_DIR: ${CLIENT_DIR:?Set CLIENT_DIR in .env}
+      AI_SERVICE_URL: http://host.docker.internal:18082
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
       - "18080:18080"
     depends_on:
       db:
+        condition: service_healthy
+      ai:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18080/api/v1/health"]
@@ -20,6 +25,22 @@ services:
       timeout: 3s
       retries: 6
       start_period: 10s
+    restart: unless-stopped
+
+  ai:
+    build: ./ai-service
+    network_mode: host
+    environment:
+      # Bind only to the Docker bridge; Ollama stays on host loopback.
+      AI_BIND_HOST: ${AI_BIND_HOST:?Set AI_BIND_HOST to the Docker bridge gateway}
+      OLLAMA_BASE_URL: http://127.0.0.1:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os,urllib.request; urllib.request.urlopen('http://'+os.environ['AI_BIND_HOST']+':18082/health',timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+      start_period: 20s
     restart: unless-stopped
 
   db:

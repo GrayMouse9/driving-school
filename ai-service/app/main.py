@@ -123,7 +123,11 @@ def coach_question(
 
             location_id=request.location_id,
 
-            user_message=request.message
+            user_message=request.message,
+            title=request.title,
+            description=request.description,
+            correct_answer=request.correct_answer,
+            answer=request.answer
         )
 
         return result

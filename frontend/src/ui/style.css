@@ -239,5 +239,16 @@ footer small {
   white-space: pre-wrap;
 }
 #exercise{position:fixed;left:24px;top:100px;padding:12px;max-width:430px;font-size:12px}#exercise button{padding:7px 10px;margin:3px}#episode-status{margin:6px}#task{position:fixed;left:24px;top:290px;max-width:420px;max-height:calc(100vh - 385px);overflow:auto}#task h2{font-size:20px}#task-options{display:grid;gap:8px}#task-options button{text-align:left}button:disabled{opacity:.55;cursor:default}#task-feedback{font-size:13px;color:#7a4f2c}#chat{left:auto;right:24px;bottom:85px}#talk{z-index:4}#task-source{display:block;font-size:11px;letter-spacing:0}#feedback{z-index:5;top:auto;bottom:85px;max-width:430px}#preview-banner{bottom:78px}@media(max-width:700px){#exercise{max-width:270px}#task{top:300px;max-width:280px}#diag{max-width:210px}#chat{width:245px}#task h2{font-size:16px}}
-#navigation{position:fixed;left:24px;bottom:95px;width:196px;background:#faf7edef;padding:8px;border-radius:18px;box-shadow:0 8px 28px #203e4825;pointer-events:none}#minimap{display:block;position:static;width:180px;height:180px;border-radius:12px}#participants{font-size:11px;line-height:1.4;padding:7px 4px 0;overflow-wrap:anywhere}body:has(#task:not([hidden])) #navigation{display:none}@media(max-width:700px){#navigation{left:12px;bottom:85px;width:136px}#minimap{width:120px;height:120px}}
+#navigation{position:fixed;left:24px;bottom:95px;width:196px;background:#faf7edef;padding:8px;border-radius:18px;box-shadow:0 8px 28px #203e4825;pointer-events:none}#minimap{display:block;position:static;width:180px;height:180px;border-radius:12px}#participants{font-size:11px;line-height:1.4;padding:7px 4px 0;overflow-wrap:anywhere}@media(max-width:700px){#navigation{left:12px;bottom:85px;width:136px}#minimap{width:120px;height:120px}}
 header #logout{pointer-events:auto;background:#f9f5e7ed;color:#294f52;padding:10px 14px;font-size:12px}header #connection{margin-left:auto}
+
+/* Keep the question and the junction overview available together. */
+#instructor-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+#instructor-actions button { text-align: left; padding: 10px; }
+#talk { max-height: calc(100vh - 160px); overflow: auto; }
+
+/* Keep the full-screen sign-in screen when the game styles are loaded. */
+#login[data-state] {
+  inset: 0;
+  width: auto;
+}

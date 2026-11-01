@@ -3,7 +3,7 @@ import { box, dispose, vehicleGeometry, priorityFace, mainRoadPlate,
   pedestrianGeometry, signalGeometry, setSignalAspect, HintLayer,
   roadGeometry, crosswalkGeometry, teachingMarker, cockpitGeometry, sceneryGeometry,
   pickObjectId as raycastObjectId, pickAgent as raycastAgent } from "./renderer";
-import type { VisualHint, PedestrianState, SignalState } from "../../network/protocol";
+import type { VisualHint, PedestrianState, SignalState, ObserverState } from "../../network/protocol";
 export { dispose } from "./renderer";
 import type {Agent, Player, Vehicle} from "../entities/types";
 import type {Chunk} from "../world/types";
@@ -156,12 +156,16 @@ function sign(agent: Agent) {
   return g;
 }
 export class GameScene {
+  hiddenObjectIds=new Set<string>();
+  setHiddenObjects(ids:string[]){this.hiddenObjectIds=new Set(ids);for(const chunk of this.chunks.values())for(const child of chunk.group.children){const id=child.userData.objectId;if(id)child.visible=!this.hiddenObjectIds.has(id);}this.clearHints();}
   readonly scene = new T.Scene();
   readonly camera = new T.PerspectiveCamera(72, 1, 0.05, 180);
   readonly renderer: T.WebGLRenderer;
   readonly chunks = new Map<string, { data: Chunk; group: T.Group }>();
   private cars = new Map<string, T.Group>();
   private pedestrians = new Map<string, T.Group>();
+  private observers = new Map<string,T.Group>();
+  private observerYaws = new Map<string,number>();
   private signals = new Map<string, T.Group>();
   private signalStates = new Map<string, SignalState["aspect"]>();
   private hints: HintLayer;
@@ -175,9 +179,9 @@ export class GameScene {
   constructor(readonly canvas: HTMLCanvasElement) {
     this.hints = new HintLayer(this.scene);
     this.cockpit.userData.pickIgnore = true;
-    this.renderer = new T.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
-    this.renderer.shadowMap.enabled = true;
+    this.renderer = new T.WebGLRenderer({ canvas, antialias: false, powerPreference:'high-performance' });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1));
+    this.renderer.shadowMap.enabled = false;
     this.renderer.shadowMap.type = T.PCFSoftShadowMap;
     this.scene.background = new T.Color(0xbcdbe6);
     this.scene.fog = new T.Fog(0xbcdbe6, 38, 85);
@@ -218,7 +222,11 @@ export class GameScene {
     }
     // Optional in the streamed teaching payload; no client-side scenario layout.
     for (const marker of data.teaching?.markers ?? []) g.add(teachingMarker(marker));
-    for (const obj of data.objects) g.add(sceneryGeometry(obj));
+    for (const obj of data.objects) {
+      const model=sceneryGeometry(obj);
+      if(obj.kind==='observer')this.observers.set(obj.id,model);
+      g.add(model);
+    }
     for (const agent of data.agents) g.add(sign(agent));
     for (const signal of data.teaching?.signals ?? []) {
       const light = signalGeometry();
@@ -231,18 +239,21 @@ export class GameScene {
       g.add(light);
     }
     this.chunks.set(data.id, { data, group: g });
+    for(const child of g.children)if(this.hiddenObjectIds?.has(child.userData.objectId))child.visible=false;
     this.scene.add(g);
   }
   removeChunk(id: string) {
     const old = this.chunks.get(id);
     if (old) {
       this.clearHints();
+      for(const obj of old.data.objects)if(obj.kind==='observer')this.observers.delete(obj.id);
       for (const signal of old.data.teaching?.signals ?? []) this.signals.delete(signal.id);
       dispose(old.group);
       this.chunks.delete(id);
     }
   }
-  snapshot(players: Player[], vehicles: Vehicle[], pedestrians: PedestrianState[] = [], signals: SignalState[] = []) {
+  snapshot(players: Player[], vehicles: Vehicle[], pedestrians: PedestrianState[] = [], signals: SignalState[] = [], observers:ObserverState[] = []) {
+    this.observerYaws=new Map(observers.filter(o=>Number.isFinite(o.yaw)).map(o=>[o.id,o.yaw]));
     this.players = players;
     this.targets = vehicles;
     const ids = new Set(vehicles.map((v) => v.id));
@@ -336,6 +347,8 @@ export class GameScene {
     this.chunks.clear();
     this.cars.clear();
     this.pedestrians.clear();
+    this.observers.clear();
+    this.observerYaws.clear();
     this.signals.clear();
     this.signalStates.clear();
     this.targets = [];
@@ -377,6 +390,13 @@ export class GameScene {
   }
   render(dt: number) {
     const alpha = 1 - Math.exp(-dt * 14);
+    for(const [id,model] of this.observers){
+      const yaw=this.observerYaws.get(id);if(yaw===undefined)continue;
+      const head=model.getObjectByName('observer-head');if(!head)continue;
+      const relative=Math.atan2(Math.sin(yaw-model.rotation.y),Math.cos(yaw-model.rotation.y));
+      const target=Math.max(-75*Math.PI/180,Math.min(75*Math.PI/180,relative));
+      head.rotation.y+=(target-head.rotation.y)*alpha;
+    }
     for (const v of this.targets) {
       const g = this.cars.get(v.id)!;
       g.visible = v.id !== this.self?.vehicleId;
