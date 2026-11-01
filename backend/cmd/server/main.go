@@ -60,6 +60,13 @@ func main() {
 	mux := http.NewServeMux()
 	mux.Handle("/api/", api)
 	mux.Handle("/ws", api)
+	mux.HandleFunc("GET /admin/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/admin/" {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, clientDir+"/index.html")
+	})
 	mux.Handle("/", http.FileServer(http.Dir(clientDir)))
 	httpServer := &http.Server{Addr: address, Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 	shutdown, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

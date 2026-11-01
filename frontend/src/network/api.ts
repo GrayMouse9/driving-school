@@ -12,7 +12,7 @@ export async function http<T>(path:string,body?:unknown):Promise<T>{
  return response.status===204?undefined as T:response.json();
 }
 export class Network extends EventTarget {
- private ws?:WebSocket;private generation=0;private heartbeat?:ReturnType<typeof setInterval>;private lastMessage=0;private lastRevision=-1;private worldReady=false;private expectedLoadAck?:string;private worldVersion?:string;
+ private ws?:WebSocket;private generation=0;private heartbeat?:ReturnType<typeof setInterval>;private lastMessage=0;private lastRevision=-1;private worldReady=false;private expectedLoadAck?:string;private worldVersion?:string;private fps?:number;
  ready=false;
  status(text:string){this.dispatchEvent(new CustomEvent('status',{detail:text}));}
  private raw(type:string,payload:unknown,id?:string){if(this.ws?.readyState!==WebSocket.OPEN)return false;this.ws.send(JSON.stringify({v:1,type,payload,...(id?{requestId:id}:{})}));return true;}
@@ -30,6 +30,7 @@ export class Network extends EventTarget {
    if(message?.v!==1||typeof message.type!=='string'||message.payload===null||typeof message.payload!=='object')throw new Error('Неверный конверт сервера');
    sizes.set(message,new TextEncoder().encode(JSON.stringify(message.payload)).byteLength);this.lastMessage=Date.now();
    if(message.type==='world_joined'){this.ready=true;this.worldReady=false;this.lastRevision=-1;this.status('Подключено · загрузка города');}
+   if(message.type==='pong'&&typeof message.payload.clientTime==='number'&&this.fps!==undefined){const ping=Date.now()-message.payload.clientTime;if(ping>=0&&ping<=30000)this.reportTelemetry(this.fps,ping);}
    if(message.type==='world_interest'){
     if(message.payload.worldVersion&&message.payload.worldVersion!==this.worldVersion){this.worldVersion=message.payload.worldVersion;this.lastRevision=-1;}const revision=message.payload.revision;if(!Number.isSafeInteger(revision)||revision<=this.lastRevision)return;
     this.lastRevision=revision;this.worldReady=false;this.expectedLoadAck=undefined;
@@ -47,6 +48,10 @@ export class Network extends EventTarget {
   const outgoingId=id??(type==='ping'?undefined:requestId());if(type==='world_loaded')this.expectedLoadAck=outgoingId;return this.raw(type,payload,outgoingId);
  }
  input(payload:Input){const {seq,throttle,brake,steer}=payload;return this.send('player_input',{seq,throttle,brake,steer});}
+ // service: сохраняет последнее измерение частоты кадров.
+ setFPS(fps:number){this.fps=fps;}
+ // service: отправляет показатели по действующему игровому соединению.
+ reportTelemetry(fps:number,ping:number){return this.ready&&this.raw('telemetry',{fps,ping});}
  disconnect(){this.generation++;this.ready=false;this.worldReady=false;this.lastRevision=-1;this.expectedLoadAck=undefined;this.worldVersion=undefined;
   if(this.heartbeat){clearInterval(this.heartbeat);this.heartbeat=undefined;}const ws=this.ws;this.ws=undefined;ws?.close();this.dispatchEvent(new Event('disconnected'));
  }

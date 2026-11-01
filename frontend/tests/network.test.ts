@@ -51,6 +51,7 @@ test('v1 handshake joins once and blocks input until matching world acknowledgme
  try{await net.connect();assert.deepEqual(requests,['/api/v1/profile']);const ws=sockets[0];assert.equal(ws.url,'ws://demo.local:8080/ws');assert.equal(net.send('chat_send',{text:'before join'}),false);
  ws.onopen();assert.equal(ws.sent[0].type,'join_world');assert.ok(ws.sent[0].requestId);
  ws.message('world_joined',{selfId:'p1'});assert.equal(net.ready,true);
+ net.reportTelemetry(60, 24);assert.equal(ws.sent.at(-1).type,'telemetry');assert.deepEqual(ws.sent.at(-1).payload,{fps:60,ping:24});
  const input={seq:1,throttle:1,brake:0,steer:0,moveX:0,moveZ:0,lookYaw:0};assert.equal(net.input(input),false);
  ws.message('world_interest',{revision:2});ws.message('world_load_status',{revision:1,ready:true});assert.equal(net.input(input),false);
  net.send('world_loaded',{revision:2,chunkIds:['c1']},'loaded-2');ws.message('world_load_status',{revision:2,ready:true},'old-ack');assert.equal(net.input(input),false);ws.message('world_load_status',{revision:2,ready:true},'loaded-2');assert.equal(net.input(input),true);assert.equal(ws.sent.at(-1).type,'player_input');assert.deepEqual(Object.keys(ws.sent.at(-1).payload).sort(),['brake','seq','steer','throttle']);

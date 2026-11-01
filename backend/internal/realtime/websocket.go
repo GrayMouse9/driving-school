@@ -218,6 +218,21 @@ func (h *socketHub) serve(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 			}
 			continue
 		}
+		if message.Type == "telemetry" && h.game != nil {
+			measurement, ok := decodeTelemetry(message.Payload)
+			if !ok {
+				if !socketError(ctx, conn, "", "INVALID_MESSAGE", "Неверная телеметрия") {
+					return
+				}
+				continue
+			}
+			h.game.mu.Lock()
+			if p := h.game.players[u.ID]; p != nil && p.conn == conn {
+				p.telemetry, p.telemetryAt = measurement, time.Now()
+			}
+			h.game.mu.Unlock()
+			continue
+		}
 		if !h.handleMessage(ctx, r, u, hash, conn, message) {
 			return
 		}

@@ -17,6 +17,7 @@ func NewHandler(db *sql.DB) http.Handler {
 
 func newHandler(db *sql.DB, hub *socketHub) http.Handler {
 	mux := http.NewServeMux()
+	registerAdminRoutes(mux, db, hub.game)
 	mux.HandleFunc("GET /ws", func(w http.ResponseWriter, r *http.Request) { hub.serve(db, w, r) })
 	if hub.game != nil {
 		mux.HandleFunc("GET /api/v1/world/manifest", hub.game.serveWorldMeta)

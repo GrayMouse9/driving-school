@@ -11,6 +11,7 @@ import (
 	"errors"
 	"github.com/jackc/pgx/v5/pgconn"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -92,6 +93,7 @@ func RegisterRoutes(mux *http.ServeMux, db *sql.DB, closeSession func([32]byte, 
 			return
 		}
 		http.SetCookie(w, &http.Cookie{Name: "session", Value: token, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode, Expires: expires})
+		log.Printf("Вход пользователя: имя=%q ID=%s", u.Username, u.ID)
 		httpx.WriteJSON(w, 200, map[string]any{"user": u})
 	})
 	mux.HandleFunc("POST /api/v1/auth/logout", func(w http.ResponseWriter, r *http.Request) {

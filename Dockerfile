@@ -17,5 +17,6 @@ WORKDIR /app
 COPY --from=backend-build /out/server /app/server
 COPY --from=frontend-build /src/frontend/dist /app/frontend/dist
 COPY server-data/world/training-world.json /app/server-data/world/training-world.json
+RUN mkdir -p /app/state && chown 65532:65532 /app/state
 USER 65532:65532
 CMD ["/app/server"]
