@@ -1,0 +1,42 @@
+services:
+  app:
+    build: .
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in .env}
+      PGUSER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      PGDATABASE: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      LISTEN_ADDR: ":18080"
+      WORLD_FILE: ${WORLD_FILE:?Set WORLD_FILE in .env}
+      CLIENT_DIR: ${CLIENT_DIR:?Set CLIENT_DIR in .env}
+    ports:
+      - "18080:18080"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:18080/api/v1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 10s
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
