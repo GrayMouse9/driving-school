@@ -10,18 +10,6 @@ const agent = { id: "sign", kind: "priority", position: { x: 0, y: 0, z: -3 }, y
 const hint: VisualHint = { kind: "highlight", objectIds: ["sign"], pathIds: ["path"], zoneIds: ["zone"], durationMs: 100 };
 const chunk = { teaching: { paths: [{ id: "path", points: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: -2 }] }], zones: [{ id: "zone", kind: "stop", outline: [{ x: 0, y: 0, z: 0 }, { x: 2, y: 0, z: 0 }, { x: 1, y: 0, z: 2 }] }], signals: [] } } as unknown as Chunk;
 
-test("a road batches asphalt, sidewalk and paint into at most three draw calls", () => {
- const road={id:'road',position:{x:0,y:0,z:0},yaw:0,width:12,length:64};
- const group=R.roadGeometry(road,[road]);
- const meshes:T.Mesh[]=[];group.traverse(o=>{if(o instanceof T.Mesh)meshes.push(o);});
- assert.ok(meshes.length<=3,`road needs ${meshes.length} separate draw calls`);
- group.updateMatrixWorld(true);
- const at=(x:number,z:number)=>new T.Raycaster(new T.Vector3(x,10,z),new T.Vector3(0,-1,0)).intersectObject(group,true)[0];
- assert.ok(at(0,0).point.y<.08,'asphalt/paint remain at road level');
- assert.ok(at(6.7,0).point.y>.15,'sidewalk remains outside the asphalt');
- R.dispose(group);
-});
-
 test("priority plate projects world arms into the driver's view of the sign", () => {
   assert.deepEqual(R.mainRoadDirection("north", 0).toArray(), [0, 1]);
   const north = R.mainRoadDirection("north", Math.PI / 2);

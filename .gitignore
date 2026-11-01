@@ -11,8 +11,4 @@ data/
 *.log
 .DS_Store
 
-# Local specifications, plans and Superpowers working files
-/docs/superpowers/
-/.superpowers/
-
 !/AGENTS.md

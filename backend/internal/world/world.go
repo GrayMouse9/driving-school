@@ -15,9 +15,6 @@ type Meta struct {
 	CacheBudgetBytes int    `json:"cacheBudgetBytes"`
 	Accounting       string `json:"accounting"`
 }
-
-const PrefetchDistance = 8.0
-
 type ChunkRef struct {
 	ID        string `json:"id"`
 	Version   int    `json:"version"`
@@ -36,26 +33,6 @@ type Chunk struct {
 	X, Z, Size float64
 	Data       []byte
 	Obstacles  []player.CollisionBox
-	Roads      []player.CollisionBox
-	Teaching   *Teaching
-	Observers  []Observer
-}
-
-type Observer struct {
-	ID        string
-	X, Z, Yaw float64
-}
-
-type Teaching struct {
-	Paths []struct {
-		ID     string         `json:"id"`
-		Points []player.Point `json:"points"`
-	} `json:"paths"`
-	Zones []struct {
-		ID      string         `json:"id"`
-		Kind    string         `json:"kind"`
-		Outline []player.Point `json:"outline"`
-	} `json:"zones"`
 }
 type SpawnPoint struct {
 	X   float64 `json:"x"`
@@ -93,10 +70,7 @@ func Load(data []byte) (*World, error) {
 			} `json:"origin"`
 			Size      float64           `json:"size"`
 			Resources []json.RawMessage `json:"resources"`
-			Teaching  *Teaching         `json:"teaching"`
 			Objects   []struct {
-				ID       string `json:"id"`
-				Kind     string `json:"kind"`
 				Position struct {
 					X float64 `json:"x"`
 					Z float64 `json:"z"`
@@ -108,15 +82,7 @@ func Load(data []byte) (*World, error) {
 				Yaw        float64 `json:"yaw"`
 				Collidable bool    `json:"collidable"`
 			} `json:"objects"`
-			Roads []struct {
-				Position struct {
-					X float64 `json:"x"`
-					Z float64 `json:"z"`
-				} `json:"position"`
-				Yaw    float64 `json:"yaw"`
-				Width  float64 `json:"width"`
-				Length float64 `json:"length"`
-			} `json:"roads"`
+			Roads  []json.RawMessage `json:"roads"`
 			Agents []json.RawMessage `json:"agents"`
 		}
 		if err := json.Unmarshal(raw, &c); err != nil {
@@ -134,25 +100,13 @@ func Load(data []byte) (*World, error) {
 			}
 		}
 		ref := ChunkRef{ID: c.ID, Version: c.Version, DataBytes: len(raw), Resources: []any{}}
-		chunk := Chunk{Ref: ref, X: c.Origin.X, Z: c.Origin.Z, Size: c.Size, Data: append([]byte(nil), raw...), Teaching: c.Teaching}
-		for _, road := range c.Roads {
-			if !player.FiniteRange(road.Position.X, -1e9, 1e9) || !player.FiniteRange(road.Position.Z, -1e9, 1e9) || !player.FiniteRange(road.Yaw, -1e9, 1e9) || !player.FiniteRange(road.Width, 0.01, 1e9) || !player.FiniteRange(road.Length, 0.01, 1e9) {
-				return nil, errors.New("invalid road geometry")
-			}
-			chunk.Roads = append(chunk.Roads, player.CollisionBox{X: road.Position.X, Z: road.Position.Z, Yaw: road.Yaw, Width: road.Width, Length: road.Length})
-		}
+		chunk := Chunk{Ref: ref, X: c.Origin.X, Z: c.Origin.Z, Size: c.Size, Data: append([]byte(nil), raw...)}
 		for _, object := range c.Objects {
-			if object.Kind == "observer" {
-				if object.ID == "" || !player.FiniteRange(object.Position.X, c.Origin.X, c.Origin.X+c.Size) || !player.FiniteRange(object.Position.Z, c.Origin.Z, c.Origin.Z+c.Size) || !player.FiniteRange(object.Yaw, -1e9, 1e9) {
-					return nil, errors.New("invalid observer")
-				}
-				chunk.Observers = append(chunk.Observers, Observer{ID: object.ID, X: object.Position.X, Z: object.Position.Z, Yaw: object.Yaw})
-			}
 			if object.Collidable {
 				if object.Size.X <= 0 || object.Size.Z <= 0 {
 					return nil, errors.New("invalid obstacle dimensions")
 				}
-				chunk.Obstacles = append(chunk.Obstacles, player.CollisionBox{X: object.Position.X, Z: object.Position.Z, Width: object.Size.X, Length: object.Size.Z, Yaw: object.Yaw, ObjectID: object.ID})
+				chunk.Obstacles = append(chunk.Obstacles, player.CollisionBox{X: object.Position.X, Z: object.Position.Z, Width: object.Size.X, Length: object.Size.Z, Yaw: object.Yaw})
 			}
 		}
 		w.Chunks[c.ID] = chunk
@@ -202,11 +156,7 @@ func (w *World) Interest(x, z float64, revision int, previous []string) (Interes
 			}
 			current = id
 		}
-		dx := math.Max(math.Max(c.X-x, 0), x-c.X-c.Size)
-		dz := math.Max(math.Max(c.Z-z, 0), z-c.Z-c.Size)
-		if math.Hypot(dx, dz) <= PrefetchDistance {
-			candidates = append(candidates, c)
-		}
+		candidates = append(candidates, c)
 	}
 	if current == "" {
 		return result, errors.New("position outside world")

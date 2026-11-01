@@ -15,8 +15,7 @@ assert.equal(raw, JSON.stringify(buildWorld()) + '\n', 'Generated artifact is st
 assert.equal(JSON.stringify(buildWorld()), JSON.stringify(buildWorld()), 'Non-deterministic generator');
 const bytes = value => Buffer.byteLength(JSON.stringify(value), 'utf8');
 const base = readBaseWorld();
-const enriched = new Set(['c_-1_0','c_0_0','c_1_0']);
-assert.deepEqual(world.chunks.filter(c=>c.roads.some(r=>r.yaw===0)&&c.roads.some(r=>r.yaw!==0)).map(c=>c.id),['c_-1_0','c_0_0','c_1_0'], 'The actual server world must contain three connected teaching intersections');
+const enriched = new Set(['c_0_0']);
 assert.equal(world.chunks.length, 100);
 assert.deepEqual(Object.keys(world), ['version', 'spawnPoints', 'chunks']);
 const ids = new Set();
@@ -41,15 +40,15 @@ for (const [index, c] of world.chunks.entries()) {
   assert.ok(c.version >= 1);
   for (const name of ['objects', 'roads', 'agents', 'resources']) assert.ok(Array.isArray(c[name]));
   assert.deepEqual(c.resources, []);
-  const expectedRoads=base.chunks[index].roads.filter(r=>Math.abs(Math.cos(r.yaw))>0.5?r.position.x===32||enriched.has(c.id):r.position.z===32);
-  assert.deepEqual(c.roads, expectedRoads, 'The east-west road joins exactly three intersections');
+  const expectedRoads=base.chunks[index].roads.filter(r=>Math.abs(Math.cos(r.yaw))>0.5?r.position.x===32:r.position.z===32);
+  assert.deepEqual(c.roads, expectedRoads, 'Exactly two continuous roads share one junction');
   if (!enriched.has(c.id)) assert.deepEqual(c, {...base.chunks[index],roads:expectedRoads}, 'No padding or invented background chunks');
   for (const prior of world.chunks.slice(0, index)) assert.ok(!(c.origin.x < prior.origin.x + 64 && c.origin.x + 64 > prior.origin.x && c.origin.z < prior.origin.z + 64 && c.origin.z + 64 > prior.origin.z));
   for (const o of c.objects) {
     unique(o.id);
     assert.ok(inChunk(o.position, c));
     assert.ok(['x', 'y', 'z'].every(k => Number.isFinite(o.size[k]) && o.size[k] > 0));
-    if (o.kind !== 'bus' && !(o.kind === 'pedestrian' && o.collidable === false)) for (const road of c.roads) {
+    if (o.kind !== 'bus' && !(c.id === 'c_-1_0' && o.kind === 'pedestrian' && o.collidable === false)) for (const road of c.roads) {
       // Buildings have yaw=0; their entire footprint, not only their centre, stays off asphalt.
       assert.ok(Math.abs(o.position.x - road.position.x) >= o.size.x / 2 + (road.yaw === 0 ? road.width : road.length) / 2 || Math.abs(o.position.z - road.position.z) >= o.size.z / 2 + (road.yaw === 0 ? road.length : road.width) / 2, `${o.id} obstructs a road`);
     }
@@ -69,15 +68,8 @@ for (const [index, c] of world.chunks.entries()) {
       const steps = Math.ceil(Math.hypot(a.x - b.x, a.z - b.z) / 0.25);
       for (let j = 0; j <= steps; j++) {
         const point = { x: a.x + (b.x - a.x) * j / steps, z: a.z + (b.z - a.z) * j / steps };
-        if (p.id === 'pedestrians-walking') continue; // Only the walking path includes sidewalks.
+        if (p.id.includes('pedestrian')) continue; // Walking paths deliberately include sidewalks.
         assert.ok(world.chunks.some(chunk => chunk.roads.some(r => onRoad(point, r, radius))), `${p.id} leaves its road`);
-        const length=Math.hypot(b.x-a.x,b.z-a.z);assert.ok(length>0,`${p.id} has a repeated point`);
-        const ux=(b.x-a.x)/length,uz=(b.z-a.z)/length;
-        // Envelope covers the rendered car (wheels and lamps included).
-        for(const along of [-1.9,0,1.9])for(const across of [-1.1,0,1.1]){
-          const corner={x:point.x+ux*along-uz*across,z:point.z+uz*along+ux*across};
-          assert.ok(world.chunks.some(chunk=>chunk.roads.some(r=>onRoad(corner,r))),`${p.id}: car body leaves asphalt`);
-        }
         for (const box of obstacles) if (box.id !== 'shared-bus' || p.id !== 'shared-bus-straight') assert.ok(clearance(point, box) >= radius, `${p.id} hits ${box.id}`);
       }
     }
@@ -99,30 +91,6 @@ assert.equal(bus.kind, 'bus'); assert.equal(bus.collidable, true);
 assert.deepEqual(bus.position, {x:14,y:0,z:34.5});
 assert.deepEqual(bus.size, {x:2.5,y:3,z:8.5}); assert.equal(bus.yaw, -Math.PI / 2);
 for (const a of shared.agents) assert.deepEqual(a.mainRoadArms, ['south', 'west']);
-const crossing=world.chunks.find(c=>c.id==='c_-1_0');
-const stop=world.chunks.find(c=>c.id==='c_1_0');
-assert.ok(crossing.agents.some(a=>a.kind==='crosswalk'));
-assert.ok(crossing.objects.filter(o=>o.kind==='pedestrian'&&!o.collidable).length>=2);
-assert.ok(crossing.teaching.signals.some(s=>s.initialAspect==='green'));
-const crosswalk=crossing.teaching.zones.find(z=>z.kind==='crosswalk');assert.ok(crosswalk);
-for(const person of crossing.objects.filter(o=>o.kind==='pedestrian')){
-  assert.ok(person.position.x>=Math.min(...crosswalk.outline.map(p=>p.x))&&person.position.x<=Math.max(...crosswalk.outline.map(p=>p.x)));
-  assert.ok(person.position.z>=Math.min(...crosswalk.outline.map(p=>p.z))&&person.position.z<=Math.max(...crosswalk.outline.map(p=>p.z)));
-}
-assert.ok(stop.agents.some(a=>a.kind==='stop'));
-assert.deepEqual(stop.teaching.markers.map(m=>m.label),['А','Б','В']);
-assert.equal(stop.teaching.zones.some(z=>z.kind==='crosswalk'),false);
-const getPath=(chunk,id)=>{const p=chunk.teaching.paths.find(p=>p.id===id);assert.ok(p,`Missing ${id}`);return p.points;};
-const sameEnd=(first,second)=>assert.deepEqual(first.at(-1),second[0],'Adjacent routes must meet without a teleport');
-sameEnd(getPath(shared,'shared-p-left'),getPath(shared,'shared-p-to-crosswalk'));
-sameEnd(getPath(shared,'shared-p-to-crosswalk'),getPath(crossing,'pedestrians-p-right'));
-sameEnd(getPath(shared,'shared-k-left'),getPath(shared,'shared-k-to-stop'));
-sameEnd(getPath(shared,'shared-k-to-stop'),getPath(stop,'stop-k-approach'));
-sameEnd(getPath(stop,'stop-k-approach'),getPath(stop,'stop-k-continue'));
-const stopPosition=stop.teaching.markers.find(m=>m.label==='В').position;
-assert.ok(stopPosition.x+radius<=90,'The entire car stops before the west edge of the crossing road');
-const yielding=crossing.teaching.zones.find(z=>z.id==='pedestrians-yield');assert.ok(yielding);
-assert.ok(Math.min(...yielding.outline.map(p=>p.z))-radius>=Math.max(...crosswalk.outline.map(p=>p.z)),'Waiting space must keep the car before the crosswalk');
 // Match world.go: raw chunk bytes + internal reference manifest (not world-file bytes).
 const refs = world.chunks.map(c => ({id:c.id, version:c.version, dataBytes:bytes(c), resources:[]}));
 const total = refs.reduce((n, r) => n + r.dataBytes, 0) + bytes({version:world.version, chunks:refs});
@@ -130,7 +98,7 @@ const budget = Math.floor(total * 8 / 100);
 const meta = {version:world.version,totalWorldBytes:total,cacheBudgetBytes:budget,accounting:'utf8-uncompressed-json-plus-unique-assets'};
 function interest(point, revision, previous) {
   const current = world.chunks.find(c => inChunk(point, c)); assert.ok(current);
-  const candidates = world.chunks.map((c, i) => ({c, ref:refs[i]})).filter(({c})=>Math.hypot(Math.max(c.origin.x-point.x,0,point.x-c.origin.x-c.size),Math.max(c.origin.z-point.z,0,point.z-c.origin.z-c.size))<=8).sort((a, b) => {
+  const candidates = world.chunks.map((c, i) => ({c, ref:refs[i]})).sort((a, b) => {
     if (a.c.id === current.id) return -1; if (b.c.id === current.id) return 1;
     const distance = c => Math.hypot(point.x - c.origin.x - 32, point.z - c.origin.z - 32);
     return distance(a.c) - distance(b.c) || (a.c.id < b.c.id ? -1 : a.c.id > b.c.id ? 1 : 0);

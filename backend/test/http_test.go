@@ -31,31 +31,11 @@ func TestRegisterRejectsInvalidPassword(t *testing.T) {
 }
 
 func TestLoginRejectsInvalidCredentialsFormat(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"Анна","password":""}`))
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"username":"Анна","password":"x"}`))
 	response := httptest.NewRecorder()
 	server.NewHandler(nil).ServeHTTP(response, request)
 	if response.Code != http.StatusBadRequest {
 		t.Fatalf("got status %d, want 400", response.Code)
-	}
-}
-
-func TestLoginAcceptsExistingShortPasswordFormatWithoutRelaxingRegistration(t *testing.T) {
-	for _, tc := range []struct {
-		path string
-		want int
-	}{
-		{"/api/v1/auth/login", http.StatusServiceUnavailable},
-		{"/api/v1/auth/register", http.StatusBadRequest},
-	} {
-		response := httptest.NewRecorder()
-		request := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{"username":"Анна","password":"1"}`))
-		server.NewHandler(nil).ServeHTTP(response, request)
-		if response.Code != tc.want {
-			t.Fatalf("%s: got %d, want %d", tc.path, response.Code, tc.want)
-		}
-		if len(response.Result().Cookies()) != 0 {
-			t.Fatal("no database must never create a session")
-		}
 	}
 }
 

@@ -17,7 +17,7 @@ function sceneFixture() {
   camera.add(cockpit);
   return Object.assign(Object.create(GameScene.prototype) as GameScene, {
     scene, camera, cockpit, renderer: { render() {} },
-    chunks: new Map(), cars: new Map(), pedestrians: new Map(), observers:new Map(), observerYaws:new Map(), signals: new Map(), signalStates: new Map(),
+    chunks: new Map(), cars: new Map(), pedestrians: new Map(), signals: new Map(), signalStates: new Map(),
     hints: new HintLayer(scene), targets: [], players: [], selfId: "self", lookYaw: 1.8, lookPitch: 0.8,
   });
 }
@@ -27,31 +27,6 @@ const bus: Vehicle = { ...car, id: "bus", variant: "bus", position: { x: 0, y: 0
 const chunk: Chunk = { id: "test", version: 1, origin: { x: -16, z: -16 }, size: 32, accountedBytes: 0, resources: [], roads: [], objects: [], agents: [
   { id: "priority", kind: "priority", position: { x: 3, y: 0, z: -2 }, yaw: Math.PI / 2, mainRoadArms: ["north", "west"] },
 ], teaching: { paths: [], zones: [], signals: [{ id: "light", position: { x: 2, y: 0, z: -5 }, yaw: 0 }] } };
-
-test('stationary observer displays server direction without moving or creating duplicate people',()=>{
- const game=sceneFixture();
- const data:Chunk={...chunk,objects:[{id:'observer',kind:'observer',position:{x:8,y:0,z:8},yaw:0,size:{x:.7,y:1.8,z:.5},color:'#477bac',collidable:false}]};
- game.addChunk(data);
- const person=game.chunks.get(data.id)!.group.children.find(o=>o.userData.objectId==='observer')!;
- let meshes=0;person.traverse(o=>{if(o instanceof T.Mesh)meshes++;});
- assert.ok(meshes<=6,'body and separately rotating face should use at most six draw calls');
- const head=person.getObjectByName('observer-head');assert.ok(head,'observer needs a separate head pivot');
- const faceMeshes=head.children.filter(o=>o instanceof T.Mesh) as T.Mesh<T.BufferGeometry,T.MeshStandardMaterial>[];
- assert.ok(faceMeshes.some(o=>o.material.color.getHex()===0xffffff),'eyes need visible whites');
- assert.ok(faceMeshes.some(o=>o.material.color.getHex()===0x263541),'eyes need dark pupils');
- game.snapshot([],[],[],[],[{id:'observer',yaw:Math.PI/2}]);
- game.render(.1);
- assert.equal(person.rotation.y,0,'body must stay still');
- assert.ok(head.rotation.y>0&&head.rotation.y<Math.PI/2,'head turn should be interpolated');
- for(let i=0;i<40;i++)game.render(.1);
- assert.ok(Math.abs(head.rotation.y-75*Math.PI/180)<.001,'head must respect a natural turn limit');
- assert.equal(person.rotation.y,0);
- assert.deepEqual(person.position.toArray(),[8,0,8]);
- game.snapshot([],[],[],[],[{id:'observer',yaw:-Math.PI/2}]);
- assert.equal(game.chunks.get(data.id)!.group.children.filter(o=>o.userData.objectId==='observer').length,1);
- game.removeChunk(data.id);
- assert.equal(game.chunks.size,0);
-});
 
 test("camera stays in its car and ignores compatibility look fields", () => {
   const game = sceneFixture();
@@ -180,15 +155,9 @@ test("crossed local roads leave all four junction mouths free of sidewalks and c
     });
     assert.ok(paint.length > 0, "center dashes remain on the approaches");
     for (const dash of paint) {
-      // A paint mesh may batch disconnected dashes. Check each actual triangle,
-      // rather than its combined bounding box spanning both sides of the junction.
-      const geometry=dash.geometry,position=geometry.getAttribute('position'),index=geometry.getIndex();
-      for(let i=0;i<(index?.count??position.count);i+=3){
-        const points=[0,1,2].map(j=>new T.Vector3().fromBufferAttribute(position,index?index.getX(i+j):i+j).applyMatrix4(dash.matrixWorld));
-        const b=new T.Box3().setFromPoints(points);
-        assert.ok(b.max.x <= 26 + dx + 1e-6 || b.min.x >= 38 + dx - 1e-6 ||
-          b.max.z <= 26 + dz + 1e-6 || b.min.z >= 38 + dz - 1e-6, "no fragment of a dash enters the junction");
-      }
+      const b = new T.Box3().setFromObject(dash);
+      assert.ok(b.max.x <= 26 + dx + 1e-6 || b.min.x >= 38 + dx - 1e-6 ||
+        b.max.z <= 26 + dz + 1e-6 || b.min.z >= 38 + dz - 1e-6, "no fragment of a dash enters the junction");
     }
     game.removeChunk(data.id);
   }

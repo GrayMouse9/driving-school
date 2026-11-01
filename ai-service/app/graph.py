@@ -1,5 +1,4 @@
 from typing import Annotated, Literal, TypedDict
-from threading import Lock
 
 from langchain_core.messages import (
     AIMessage,
@@ -25,7 +24,7 @@ class GameState(TypedDict):
 
     # Пользователь и текущая ситуация
     player_id: str
-    location_id: str | int | None
+    location_id: int | None
 
     # Тип взаимодействия
     interaction_type: InteractionType
@@ -46,10 +45,7 @@ class GameState(TypedDict):
 llm = ChatOllama(
     model=OLLAMA_MODEL,
     base_url=OLLAMA_BASE_URL,
-    temperature=0.2,
-    num_predict=96,
-    num_ctx=4096,
-    keep_alive="10m"
+    temperature=0.2
 )
 
 
@@ -61,8 +57,6 @@ BASE_SYSTEM_PROMPT = """
 Общие правила:
 
 - Всегда отвечай на русском языке.
-- Отвечай кратко: два-три коротких предложения, без вступлений.
-- Называй действия по-русски: налево, прямо, направо, остановиться или уступить.
 - Объясняй понятно, спокойно и доброжелательно.
 - Не унижай игрока и не используй агрессивный тон.
 - Не придумывай обстоятельства дорожной ситуации.
@@ -170,7 +164,7 @@ def coach_node(state: GameState) -> dict:
 
         # Передаём системную инструкцию и историю диалога в LLM.
         response = llm.invoke(
-            [system_message, *state["messages"][-12:]]
+            [system_message, *state["messages"]]
         )
 
         return {
@@ -184,23 +178,10 @@ def coach_node(state: GameState) -> dict:
 
     elif interaction_type == "question":
 
-        task_prompt = f"""
+        task_prompt = """
 Игрок задаёт дополнительный вопрос инструктору.
 
-Текущая ситуация: {state.get('title') or 'Дорожная ситуация'}.
-Описание от сервера: {state.get('description') or 'Описание не передано'}.
-Последнее действие игрока: {state.get('answer') or 'Ещё не выбрано'}.
-
-Эти данные описывают текущую ситуацию и имеют приоритет
-над описаниями прошлых перекрёстков в истории.
-
 Ответь на вопрос, учитывая предыдущую историю переписки.
-
-На приветствие ответь приветствием, а не решением задания.
-На просьбу объяснить условия повтори задание инструктора и наблюдаемые
-обстоятельства. Не называй правильную кнопку, не решай за ученика,
-не обещай автоматическую остановку или пропуск пешеходов машиной.
-Готовое решение и разбор ошибки выдаются отдельно после выбора действия.
 
 Если вопрос относится к ранее разобранной ситуации,
 используй контекст предыдущих сообщений.
@@ -214,7 +195,7 @@ def coach_node(state: GameState) -> dict:
         )
 
         response = llm.invoke(
-            [system_message, *state["messages"][-12:]]
+            [system_message, *state["messages"]]
         )
 
         return {
@@ -256,8 +237,6 @@ def build_graph():
 
 
 graph = build_graph()
-player_locks: dict[str, Lock] = {}
-player_locks_guard = Lock()
 
 
 # ==========================================
@@ -269,7 +248,7 @@ def run_interaction(
     player_id: str,
     interaction_type: InteractionType,
 
-    location_id: str | int | None = None,
+    location_id: int | None = None,
 
     title: str | None = None,
     description: str | None = None,
@@ -351,12 +330,10 @@ def run_interaction(
     # ЗАПУСК ГРАФА
     # --------------------------------------
 
-    # A disconnected HTTP request can still finish local inference. Serialize
-    # a player's turns so a retry cannot race their checkpointed conversation.
-    with player_locks_guard:
-        player_lock = player_locks.setdefault(str(player_id), Lock())
-    with player_lock:
-        result = graph.invoke(initial_state, config=config)
+    result = graph.invoke(
+        initial_state,
+        config=config
+    )
 
     last_message = result["messages"][-1]
 

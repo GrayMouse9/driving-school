@@ -29,7 +29,7 @@ type credentials struct {
 func RegisterRoutes(mux *http.ServeMux, db *sql.DB, closeSession func([32]byte, time.Time)) {
 	mux.HandleFunc("POST /api/v1/auth/register", func(w http.ResponseWriter, r *http.Request) {
 		var c credentials
-		if !decodeCredentials(w, r, &c, 8) {
+		if !decodeCredentials(w, r, &c) {
 			return
 		}
 		passwordHash, err := HashPassword(c.Password)
@@ -57,7 +57,7 @@ func RegisterRoutes(mux *http.ServeMux, db *sql.DB, closeSession func([32]byte, 
 	})
 	mux.HandleFunc("POST /api/v1/auth/login", func(w http.ResponseWriter, r *http.Request) {
 		var c credentials
-		if !decodeCredentials(w, r, &c, 1) {
+		if !decodeCredentials(w, r, &c) {
 			return
 		}
 		if db == nil {
@@ -182,14 +182,14 @@ func AuthenticatedUser(w http.ResponseWriter, r *http.Request, db *sql.DB) (User
 	return u, true
 }
 
-func decodeCredentials(w http.ResponseWriter, r *http.Request, c *credentials, minimumPasswordLength int) bool {
+func decodeCredentials(w http.ResponseWriter, r *http.Request, c *credentials) bool {
 	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(c); err != nil {
 		httpx.WriteError(w, 400, "INVALID_MESSAGE", "Неверные данные")
 		return false
 	}
-	if err := decoder.Decode(new(any)); err != io.EOF || !validateCredentials(c.Username, c.Password, minimumPasswordLength) {
+	if err := decoder.Decode(new(any)); err != io.EOF || !ValidateCredentials(c.Username, c.Password) {
 		httpx.WriteError(w, 400, "INVALID_MESSAGE", "Неверные данные")
 		return false
 	}
