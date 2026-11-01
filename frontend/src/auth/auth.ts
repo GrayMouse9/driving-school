@@ -17,8 +17,8 @@ document.querySelector("#login")!.outerHTML = `
             <div class="sheet-form">
               <h1 class="auth-title">Авторизация</h1>
               <form id="auth" class="auth-form">
-                <input name="username" class="auth-input" placeholder="Имя" autocomplete="username" required maxlength="40">
-                <input name="password" class="auth-input" type="password" placeholder="Пароль" autocomplete="current-password" required>
+                <input name="username" class="auth-input" placeholder="Имя" aria-label="Имя" autocomplete="username" required>
+                <input name="password" class="auth-input" type="password" placeholder="Пароль" aria-label="Пароль" autocomplete="current-password" required>
                 <button type="submit" class="btn-primary">Войти</button>
               </form>
               <div class="auth-divider">
@@ -30,7 +30,7 @@ document.querySelector("#login")!.outerHTML = `
           <img class="fallen-mouse" src="/mouce_maskot.png" alt="" draggable="false">
         </div>
         <div class="auth-footer sheet-links">
-            <p id="notice" hidden></p>
+            <p id="notice" role="status" aria-live="polite" hidden></p>
         </div>
       </div>
       <button type="button" id="pull-rat" class="pull-rat" aria-expanded="false" aria-controls="auth-panel" aria-label="Потяните мышку вниз, чтобы открыть вход">
